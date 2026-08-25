@@ -4,8 +4,9 @@ Read-only programmatic access to a [VÖBB](https://www.voebb.de) library account
 (Verbund der Öffentlichen Bibliotheken Berlins) from Python.
 
 VÖBB has no public API, so this is a scraping client for the aDIS/BMS web app.
-It reads your current loans and searches the catalogue. It deliberately does
-**not** renew, reserve, or cancel anything.
+It reads your current loans, searches the catalogue, and mirrors due dates into
+a Nextcloud calendar so you get reminded before anything is overdue. It
+deliberately does **not** renew, reserve, or cancel anything.
 
 ## Setup
 
@@ -21,6 +22,10 @@ uv run voebb loans                        # borrowed items, soonest due first
 uv run voebb --json loans                 # same, as JSON
 uv run voebb search "Kafka Verwandlung"   # catalogue search, no login needed
 uv run voebb search "Kafka" -n 20
+
+uv run voebb sync-calendar --dry-run      # show what would change
+uv run voebb sync-calendar                # write reminders to Nextcloud
+uv run voebb sync-calendar --alarm-days 5 --calendar "Bibliothek"
 ```
 
 ```
@@ -43,6 +48,79 @@ with VoebbClient() as client:
 `VoebbClient()` reads `VOEBB_USER` / `VOEBB_PASSWORD` from `.env`; pass a
 `Credentials` object instead if you source them elsewhere. Using the client as a
 context manager logs out at the end, which frees the session server-side.
+
+## Due-date reminders
+
+`voebb sync-calendar` writes one all-day event per borrowed item into a
+Nextcloud calendar over CalDAV, each with a reminder N days before the due date
+(`VOEBB_ALARM_DAYS`, default 3).
+
+The sync is **idempotent and reconciling**: run it as often as you like.
+
+- Each event's UID is derived from the item's own library barcode
+  (`voebb-<barcode>@voebb.local`). That identifier survives renewals, so a
+  renewed item's existing event *moves* to the new due date rather than a second
+  event appearing next to it.
+- Items you have returned have their events deleted, so the calendar always
+  mirrors your account.
+- **Only events whose UID starts with `voebb-` are ever modified or deleted.**
+  Anything else in the target calendar is left strictly alone, so it is safe to
+  point this at a calendar you also use for other things.
+- `--dry-run` prints the full plan and writes nothing at all — not even
+  creating the calendar.
+
+Configure it in `.env` (see `.env.example`). Use a Nextcloud **app password**
+(Settings → Security → Create new app password), not your login password —
+it is revocable and works with 2FA. `NEXTCLOUD_URL` accepts either the bare host
+or a full `/remote.php/dav` root.
+
+### Home Assistant
+
+You do not need a Home Assistant-specific path: point HA's built-in **CalDAV**
+integration at the same Nextcloud account and it will pick up the calendar as a
+`calendar.*` entity. Automations can then trigger with an offset, e.g.
+`offset: "-3 0:0:0"` to fire three days before an item is due.
+
+### Running it daily
+
+Nothing is installed for you. A `systemd --user` timer is the tidiest option on
+Debian:
+
+```ini
+# ~/.config/systemd/user/voebb-sync.service
+[Unit]
+Description=Sync VOEBB loans to Nextcloud calendar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/git/voebb
+ExecStart=%h/git/voebb/.venv/bin/voebb sync-calendar
+```
+
+```ini
+# ~/.config/systemd/user/voebb-sync.timer
+[Unit]
+Description=Daily VOEBB loan sync
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now voebb-sync.timer
+```
+
+`Persistent=true` catches up after the machine was off. Note that user timers
+only fire while you are logged in unless you enable lingering:
+`sudo loginctl enable-linger $USER`.
 
 ## How it works
 
@@ -70,7 +148,15 @@ scoping — the `_sid` cookie is scoped to `/aDISWeb/_<sid>` and hand-rolled
 cookie headers silently break the session.
 
 All VÖBB-specific selectors live in `src/voebb/parsers.py`, so a site redesign
-is a one-file fix. Table columns are located by header text, not position.
+is a one-file fix. Table columns are located by header text, not position, and
+the title cell is split on `<br>` into title, shelf mark and barcode rather than
+being flattened into one string.
+
+In `calendar_sync.py` the diffing (`plan_sync`) is a pure function kept separate
+from the CalDAV I/O (`sync`), so all the reconcile logic is tested without a
+server. Event comparison uses a signature of the fields that matter rather than
+raw bytes, because `DTSTAMP` changes on every build and would otherwise make
+every run look like an update.
 
 ## Tests
 

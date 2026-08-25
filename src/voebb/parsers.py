@@ -25,6 +25,64 @@ def _text(node: Tag | None) -> str:
     return node.get_text(" ", strip=True).replace("\xa0", " ") if node else ""
 
 
+def _lines(node: Tag | None) -> list[str]:
+    """Split a table cell on <br> into its logical lines.
+
+    The title cell packs up to four facts into one <td>, separated only by
+    <br>: an optional [media type], the title, the shelf mark and the item
+    barcode. get_text() would weld them into one string.
+    """
+    if node is None:
+        return []
+    lines: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if joined := " ".join(current).strip():
+            lines.append(joined.replace("\xa0", " "))
+        current.clear()
+
+    for child in node.children:
+        if getattr(child, "name", None) == "br":
+            flush()
+        elif isinstance(child, Tag):
+            current.append(child.get_text(" ", strip=True))
+        else:
+            current.append(str(child).strip())
+    flush()
+    return lines
+
+
+def _split_title_cell(node: Tag | None) -> tuple[str, str, str, str]:
+    """Pull (media_type, title, shelf_mark, item_number) out of the title cell.
+
+    Everything except the title is optional, so parts are claimed from the
+    ends inward rather than by fixed position.
+    """
+    parts = _lines(node)
+    media_type = ""
+
+    if parts:
+        if match := _MEDIA_PREFIX.match(parts[0]):
+            media_type = match.group("kind")
+            remainder = parts[0][match.end():].strip()
+            parts = ([remainder] if remainder else []) + parts[1:]
+
+    item_number = ""
+    if parts and parts[-1].isdigit():
+        item_number = parts[-1]
+        parts = parts[:-1]
+
+    # Only treat a trailing line as the shelf mark if something is left for
+    # the title - a single-line cell is a title, not a shelf mark.
+    shelf_mark = ""
+    if len(parts) > 1:
+        shelf_mark = parts[-1]
+        parts = parts[:-1]
+
+    return media_type, " ".join(parts).strip(), shelf_mark, item_number
+
+
 def parse_german_date(value: str) -> date | None:
     match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", value)
     if not match:
@@ -71,23 +129,21 @@ def parse_loans(soup: BeautifulSoup) -> list[Loan]:
         def cell(idx: int | None) -> str:
             return _text(cells[idx]) if idx is not None and idx < len(cells) else ""
 
-        raw_title = cell(i_title)
-        media_type = ""
-        if match := _MEDIA_PREFIX.match(raw_title):
-            media_type = match.group("kind")
-            raw_title = raw_title[match.end():]
+        media_type, title, shelf_mark, item_number = _split_title_cell(cells[i_title])
 
         note = cell(i_note)
         renewals = int(m.group(1)) if (m := _RENEWALS.search(note)) else None
 
         loans.append(
             Loan(
-                title=raw_title.strip(),
+                title=title,
                 library=cell(i_lib),
                 due_date=parse_german_date(cell(i_due)),
                 note=note,
                 renewals=renewals,
                 media_type=media_type,
+                shelf_mark=shelf_mark,
+                item_number=item_number,
             )
         )
     return loans

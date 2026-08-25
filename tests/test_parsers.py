@@ -40,6 +40,36 @@ def test_splits_media_type_off_the_title(loans):
     assert "[" not in loans[0].title
 
 
+def test_splits_the_title_cell_into_its_parts(loans):
+    """The cell packs title, shelf mark and barcode behind <br> separators."""
+    assert loans[0].shelf_mark == "Kinderhörbuch Must"
+    assert loans[0].item_number == "00000000001"
+    assert "00000000001" not in loans[0].title
+    assert "Kinderhörbuch" not in loans[0].title
+
+
+def test_item_numbers_are_distinct_per_row(loans):
+    """They become calendar UIDs, so collisions would silently merge events."""
+    assert loans[0].item_number != loans[1].item_number
+
+
+def test_row_without_a_media_prefix_still_splits(loans):
+    assert loans[1].media_type == ""
+    assert loans[1].shelf_mark == "5.2/Comic Beis"
+    assert loans[1].item_number == "00000000002"
+    assert loans[1].title == "Beispielreihe 1/2. - 4."
+
+
+def test_single_line_title_cell_is_all_title():
+    """A cell with no <br> must not have its only line taken as a shelf mark."""
+    html = """<table class="rTable_table"><tr><th>Fällig am</th><th>Bibliothek</th>
+    <th>Titel</th><th>Hinweis</th></tr><tr><td>01.01.2027</td><td>Zweigstelle</td>
+    <td>Nur ein Titel</td><td></td></tr></table>"""
+    loan = parse_loans(BeautifulSoup(html, "lxml"))[0]
+    assert loan.title == "Nur ein Titel"
+    assert loan.shelf_mark == "" and loan.item_number == ""
+
+
 def test_counts_renewals_from_the_hinweis_column(loans):
     assert loans[0].renewals == 3
     assert loans[1].renewals == 2

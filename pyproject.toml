@@ -8,6 +8,8 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "lxml>=5.2",
     "python-dotenv>=1.0",
+    "caldav>=3.2",
+    "icalendar>=7.3",
 ]
 
 [project.scripts]

@@ -16,6 +16,8 @@ class Loan:
     note: str = ""
     renewals: int | None = None
     media_type: str = ""
+    shelf_mark: str = ""
+    item_number: str = ""
 
     @property
     def days_left(self) -> int | None:

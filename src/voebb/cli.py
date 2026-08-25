@@ -7,7 +7,9 @@ import dataclasses
 import json
 import sys
 
+from .calendar_sync import loan_uid, sync
 from .client import VoebbClient
+from .config import load_nextcloud_config
 from .session import AdisError
 
 
@@ -18,7 +20,7 @@ def _emit_json(rows: list) -> None:
 def _cmd_loans(args: argparse.Namespace) -> int:
     with VoebbClient() as client:
         loans = client.loans()
-    if args.json:
+    if getattr(args, "json", False):
         _emit_json(loans)
         return 0
     if not loans:
@@ -36,7 +38,7 @@ def _cmd_loans(args: argparse.Namespace) -> int:
 def _cmd_search(args: argparse.Namespace) -> int:
     with VoebbClient() as client:
         results = client.search(args.query)
-    if args.json:
+    if getattr(args, "json", False):
         _emit_json(results)
         return 0
     if not results:
@@ -53,10 +55,52 @@ def _cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_sync_calendar(args: argparse.Namespace) -> int:
+    config = load_nextcloud_config()
+    if args.calendar:
+        config = dataclasses.replace(config, calendar_name=args.calendar)
+    if args.alarm_days is not None:
+        config = dataclasses.replace(config, alarm_days=args.alarm_days)
+
+    with VoebbClient() as client:
+        loans = client.loans()
+
+    titles = {loan_uid(loan): loan.title for loan in loans}
+    plan = sync(loans, config, dry_run=args.dry_run)
+
+    for uid, label in (("+", "create"), ("~", "update")):
+        for event_uid in getattr(plan, label):
+            print(f"{uid} {titles.get(event_uid, event_uid)}")
+    for event_uid in plan.delete:
+        print(f"- {titles.get(event_uid, event_uid)}   (zurückgegeben)")
+    for title in plan.skipped:
+        print(f"? {title}   (kein Fälligkeitsdatum, übersprungen)")
+
+    where = f"{config.calendar_name!r} auf {config.url}"
+    if args.dry_run:
+        if plan.calendar_missing:
+            print(f"! Kalender {config.calendar_name!r} existiert noch nicht "
+                  f"und würde angelegt werden.")
+        print(f"\nProbelauf für {where} - nichts geändert.")
+        print(plan.summary())
+    elif plan.is_empty:
+        print(f"{where}: bereits aktuell ({plan.summary()}).")
+    else:
+        print(f"\n{where}: {plan.summary()}.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # Shared so --json is accepted both before and after the subcommand.
+    # SUPPRESS matters: with a normal default the subparser would write
+    # json=False over a --json given before the subcommand.
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--json", action="store_true", help="emit JSON instead of text")
+    common.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="emit JSON instead of text",
+    )
 
     parser = argparse.ArgumentParser(
         prog="voebb", description="Read a VOEBB library account.", parents=[common]
@@ -70,6 +114,19 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument("query")
     search.add_argument("-n", "--limit", type=int, default=10, help="results to show (default 10)")
     search.set_defaults(func=_cmd_search)
+
+    sync_cal = sub.add_parser(
+        "sync-calendar",
+        help="mirror loans into the Nextcloud calendar as reminders",
+    )
+    sync_cal.add_argument(
+        "--dry-run", action="store_true", help="show what would change, change nothing"
+    )
+    sync_cal.add_argument("--calendar", help="override the target calendar name")
+    sync_cal.add_argument(
+        "--alarm-days", type=int, help="days before the due date to fire the reminder"
+    )
+    sync_cal.set_defaults(func=_cmd_sync_calendar)
 
     args = parser.parse_args(argv)
     try:
