@@ -15,9 +15,10 @@ CREDENTIALS = Credentials(user="123", password="secret")
 class FakeSession:
     """Stands in for AdisSession, counting how often it is driven."""
 
-    def __init__(self, delay: float = 0.0, timeout: float = 0.0) -> None:
+    def __init__(self, delay: float = 0.0, timeout: float = 0.0, retries: int = 3) -> None:
         self.delay = delay
         self.timeout = timeout
+        self.retries = retries
         self.http = type("Http", (), {"close": lambda self: None})()
 
 

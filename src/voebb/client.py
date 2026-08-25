@@ -90,7 +90,11 @@ class VoebbClient:
 
     def _reset_session(self) -> None:
         """Throw the session away so the next call logs in from scratch."""
-        self.session = AdisSession(delay=self.session.delay, timeout=self.session.timeout)
+        self.session = AdisSession(
+            delay=self.session.delay,
+            timeout=self.session.timeout,
+            retries=self.session.retries,
+        )
         self._logged_in = False
 
     def loans(self) -> list[Loan]:

@@ -80,10 +80,22 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   when the site stops saying it. `Loan.note` keeps the raw text, so
   `voebb loans --json` still shows exactly what the site said.
 
-If a session drops mid-run — aDIS expires them on its own schedule and signals
-it by silently bouncing to the start page rather than erroring — the client
-rebuilds the session and retries once, so an unattended daily run does not skip
-a day over a transient hiccup.
+Two kinds of transient failure are handled, which matters once this runs
+unattended:
+
+- **Network.** Both transports retry connection failures, read timeouts and
+  429/5xx responses three times with exponential backoff, honouring
+  `Retry-After`. Note that urllib3 does not retry `POST` by default and *every*
+  aDIS interaction is a POST — even navigation — so the policy opts in
+  explicitly. That is safe here precisely because the client never mutates the
+  library account. 4xx responses are not retried: a rejected login or a missing
+  page is not worth hammering a public library service over.
+- **Session expiry.** aDIS expires sessions on its own schedule and signals it
+  by silently bouncing to the start page rather than erroring, so the client
+  rebuilds the session and retries once.
+
+Exhausted retries surface as an error rather than an empty result, so a failed
+fetch can never be mistaken for "no loans" and quietly wipe the calendar.
 
 Configure it in `.env` (see `.env.example`). Use a Nextcloud **app password**
 (Settings → Security → Create new app password), not your login password —

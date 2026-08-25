@@ -19,6 +19,8 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup, Tag
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 BASE_URL = "https://www.voebb.de"
 START_URL = f"{BASE_URL}/aDISWeb/app/prod00"
@@ -27,6 +29,36 @@ START_URL = f"{BASE_URL}/aDISWeb/app/prod00"
 # 12-char fixed-width record: "ZTEXT" padded to 12, then the screen code.
 # Mirrors htmlOnLink() in /aDISWeb/js/aDISMain.min.js.
 _SELECT_PREFIX = "ZTEXT".ljust(12)
+
+# Transport-level retry, so one dropped connection during an unattended run
+# does not cost a whole day's reminders.
+RETRY_TOTAL = 3
+RETRY_BACKOFF = 1.0
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+
+
+def build_retry(total: int = RETRY_TOTAL, backoff: float = RETRY_BACKOFF) -> Retry:
+    """Retry policy shared by the aDIS and CalDAV transports."""
+    return Retry(
+        total=total,
+        connect=total,
+        read=total,
+        status=total,
+        backoff_factor=backoff,
+        status_forcelist=RETRY_STATUSES,
+        # Every aDIS interaction is a POST - even plain navigation - so the
+        # default "idempotent methods only" policy would retry nothing at all.
+        # Safe here because this client never mutates the library account: the
+        # worst a replayed navigation POST can do is return an unexpected page.
+        allowed_methods=None,
+        raise_on_status=False,
+        respect_retry_after_header=True,
+    )
+
+
+def retrying_adapter(total: int = RETRY_TOTAL) -> HTTPAdapter:
+    return HTTPAdapter(max_retries=build_retry(total))
+
 
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -65,7 +97,9 @@ class FormState:
 class AdisSession:
     """Drives the aDIS form state machine one click at a time."""
 
-    def __init__(self, *, delay: float = 0.4, timeout: float = 30.0) -> None:
+    def __init__(
+        self, *, delay: float = 0.4, timeout: float = 30.0, retries: int = RETRY_TOTAL
+    ) -> None:
         self.http = requests.Session()
         # requests implements RFC 6265 path-scoped cookies, which the `_sid`
         # cookie (Path=/aDISWeb/_<sid>) depends on. Hand-rolled cookie headers
@@ -77,8 +111,13 @@ class AdisSession:
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             }
         )
+        adapter = retrying_adapter(retries)
+        self.http.mount("https://", adapter)
+        self.http.mount("http://", adapter)
+
         self.delay = delay
         self.timeout = timeout
+        self.retries = retries
         self.page: BeautifulSoup | None = None
         self.form: FormState | None = None
         self.url: str | None = None

@@ -22,9 +22,11 @@ from typing import Any
 
 import caldav
 from icalendar import Alarm, Calendar, Event
+from niquests.adapters import HTTPAdapter as NiquestsHTTPAdapter
 
 from .config import NextcloudConfig
 from .models import Loan
+from .session import build_retry
 
 # Fragments of the Hinweis column that do not belong in a calendar event.
 # "Heute verlängert" is relative to the day it was scraped, so it would be
@@ -223,6 +225,12 @@ def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None
     client = caldav.DAVClient(  # ty: ignore[call-non-callable]
         url=dav_root(config.url), username=config.user, password=config.app_password
     )
+    # caldav rides on niquests, not requests, so it needs its own adapter -
+    # but the same urllib3 retry policy drives both.
+    dav_adapter = NiquestsHTTPAdapter(max_retries=build_retry())
+    client.session.mount("https://", dav_adapter)
+    client.session.mount("http://", dav_adapter)
+
     principal = client.get_principal()
     for calendar in principal.get_calendars():
         if _display_name(calendar) == config.calendar_name:
