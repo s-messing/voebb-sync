@@ -68,8 +68,8 @@ def load_nextcloud_config() -> NextcloudConfig:
     raw_days = os.getenv("VOEBB_ALARM_DAYS", "").strip()
     try:
         alarm_days = int(raw_days) if raw_days else DEFAULT_ALARM_DAYS
-    except ValueError:
-        raise SystemExit(f"VOEBB_ALARM_DAYS must be a whole number, got {raw_days!r}")
+    except ValueError as exc:
+        raise SystemExit(f"VOEBB_ALARM_DAYS must be a whole number, got {raw_days!r}") from exc
     if alarm_days < 0:
         raise SystemExit(f"VOEBB_ALARM_DAYS must not be negative, got {alarm_days}")
 

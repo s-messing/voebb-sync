@@ -12,6 +12,7 @@ from datetime import date, datetime
 from bs4 import BeautifulSoup, Tag
 
 from .models import Loan, SearchResult
+from .session import _attr
 
 _RENEWALS = re.compile(r"(\d+)\s+Verlängerung")
 _MEDIA_PREFIX = re.compile(r"^\[(?P<kind>[^\]]+)\]\s*")
@@ -62,11 +63,10 @@ def _split_title_cell(node: Tag | None) -> tuple[str, str, str, str]:
     parts = _lines(node)
     media_type = ""
 
-    if parts:
-        if match := _MEDIA_PREFIX.match(parts[0]):
-            media_type = match.group("kind")
-            remainder = parts[0][match.end():].strip()
-            parts = ([remainder] if remainder else []) + parts[1:]
+    if parts and (match := _MEDIA_PREFIX.match(parts[0])):
+        media_type = match.group("kind")
+        remainder = parts[0][match.end() :].strip()
+        parts = ([remainder] if remainder else []) + parts[1:]
 
     item_number = ""
     if parts and parts[-1].isdigit():
@@ -120,25 +120,25 @@ def parse_loans(soup: BeautifulSoup) -> list[Loan]:
     if i_title is None:
         raise ParseError(f"no title column in loans table; headers={headers}")
 
+    def cell(cells: list[Tag], idx: int | None) -> str:
+        return _text(cells[idx]) if idx is not None and idx < len(cells) else ""
+
     loans: list[Loan] = []
     for row in rows[1:]:
         cells = row.find_all("td")
         if len(cells) <= i_title:
             continue
 
-        def cell(idx: int | None) -> str:
-            return _text(cells[idx]) if idx is not None and idx < len(cells) else ""
-
         media_type, title, shelf_mark, item_number = _split_title_cell(cells[i_title])
 
-        note = cell(i_note)
+        note = cell(cells, i_note)
         renewals = int(m.group(1)) if (m := _RENEWALS.search(note)) else None
 
         loans.append(
             Loan(
                 title=title,
-                library=cell(i_lib),
-                due_date=parse_german_date(cell(i_due)),
+                library=cell(cells, i_lib),
+                due_date=parse_german_date(cell(cells, i_due)),
                 note=note,
                 renewals=renewals,
                 media_type=media_type,
@@ -165,12 +165,9 @@ def parse_search_results(soup: BeautifulSoup) -> list[SearchResult]:
                 title=title,
                 # The first .rList_name is a spacer; the populated one carries
                 # the statement of responsibility.
-                author=next(
-                    (t for n in li.select(".rList_name") if (t := _text(n))), ""
-                ),
+                author=next((t for n in li.select(".rList_name") if (t := _text(n))), ""),
                 year=_text(li.select_one(".rList_jahr")),
-                media_type=(icon.get("alt") or icon.get("title") or "") if icon else "",
+                media_type=(_attr(icon, "alt") or _attr(icon, "title")) if icon else "",
             )
         )
     return results
-

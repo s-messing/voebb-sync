@@ -17,10 +17,10 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import caldav
-from caldav.lib.error import NotFoundError
 from icalendar import Alarm, Calendar, Event
 
 from .config import NextcloudConfig
@@ -69,7 +69,7 @@ def build_event(loan: Loan, *, alarm_days: int, stamp: datetime | None = None) -
     event.add("dtstart", loan.due_date)
     # DTEND is exclusive, so a single-day event ends the following day.
     event.add("dtend", loan.due_date + timedelta(days=1))
-    event.add("dtstamp", stamp or datetime.now(timezone.utc))
+    event.add("dtstamp", stamp or datetime.now(UTC))
     event.add("transp", "TRANSPARENT")
 
     alarm = Alarm()
@@ -114,7 +114,8 @@ def event_signature(ical: bytes) -> tuple:
     calendar = Calendar.from_ical(ical)
     for component in calendar.walk("VEVENT"):
         alarms = tuple(
-            str(alarm.get("trigger").dt) for alarm in component.walk("VALARM")
+            str(alarm.get("trigger").dt)
+            for alarm in component.walk("VALARM")
             if alarm.get("trigger") is not None
         )
         return (
@@ -155,9 +156,7 @@ class SyncPlan:
         return ", ".join(parts)
 
 
-def plan_sync(
-    loans: list[Loan], existing: dict[str, bytes], *, alarm_days: int
-) -> SyncPlan:
+def plan_sync(loans: list[Loan], existing: dict[str, bytes], *, alarm_days: int) -> SyncPlan:
     """Diff desired events against what the calendar already holds.
 
     `existing` maps UID -> iCal payload, and must contain only events this tool
@@ -186,13 +185,15 @@ def plan_sync(
     return plan
 
 
-def open_calendar(config: NextcloudConfig, *, create: bool = True) -> caldav.Calendar | None:
+def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None:
     """Find the configured calendar.
 
     With `create=False` a missing calendar yields None instead of being
     created, so that a dry run stays genuinely read-only.
     """
-    client = caldav.DAVClient(
+    # caldav ships no py.typed, so its classes resolve to `object` and every
+    # call through them looks non-callable to the type checker.
+    client = caldav.DAVClient(  # ty: ignore[call-non-callable]
         url=dav_root(config.url), username=config.user, password=config.app_password
     )
     principal = client.get_principal()
@@ -208,15 +209,14 @@ def dav_root(url: str) -> str:
     return url if "/remote.php" in url else f"{url}/remote.php/dav"
 
 
-def _display_name(calendar: caldav.Calendar) -> str:
+def _display_name(calendar: Any) -> str:
     try:
-        properties = calendar.get_properties([caldav.elements.dav.DisplayName()])
-        return str(properties.get("{DAV:}displayname", "") or "")
+        return str(calendar.get_display_name() or "")
     except Exception:
-        return str(getattr(calendar, "name", "") or "")
+        return ""
 
 
-def fetch_managed_events(calendar: caldav.Calendar) -> tuple[dict[str, bytes], dict]:
+def fetch_managed_events(calendar: Any) -> tuple[dict[str, bytes], dict]:
     """Return only the events this tool owns, keyed by UID.
 
     Events without our UID prefix are ignored entirely, so the target calendar
@@ -258,6 +258,9 @@ def sync(loans: list[Loan], config: NextcloudConfig, *, dry_run: bool = False) -
 
     if dry_run:
         return plan
+
+    if calendar is None:  # unreachable with create=True, but keeps the type honest
+        raise RuntimeError("calendar unavailable")
 
     for ical in plan.create.values():
         calendar.add_event(ical)

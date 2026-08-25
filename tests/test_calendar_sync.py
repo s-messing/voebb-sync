@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+import dataclasses
+from datetime import UTC, date, datetime
 
 import pytest
 from icalendar import Calendar
@@ -18,11 +19,11 @@ from voebb.calendar_sync import (
 )
 from voebb.models import Loan
 
-STAMP = datetime(2026, 8, 25, 12, 0, tzinfo=timezone.utc)
+STAMP = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
 
 
 def make_loan(**overrides) -> Loan:
-    defaults = dict(
+    base = Loan(
         title="Der Prozess",
         library="Musterbezirk: Stadtteilbibliothek",
         due_date=date(2026, 9, 8),
@@ -32,7 +33,7 @@ def make_loan(**overrides) -> Loan:
         shelf_mark="Rom Kafk",
         item_number="01456136631",
     )
-    return Loan(**{**defaults, **overrides})
+    return dataclasses.replace(base, **overrides)
 
 
 def vevent(ical: bytes):
@@ -157,7 +158,7 @@ class TestSignature:
     def test_ignores_dtstamp(self):
         """Otherwise every run would look like an update."""
         early = build_event(make_loan(), alarm_days=3, stamp=STAMP)
-        later = build_event(make_loan(), alarm_days=3, stamp=datetime(2027, 1, 1, tzinfo=timezone.utc))
+        later = build_event(make_loan(), alarm_days=3, stamp=datetime(2027, 1, 1, tzinfo=UTC))
         assert event_signature(early) == event_signature(later)
 
     def test_notices_a_moved_due_date(self):

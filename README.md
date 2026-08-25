@@ -164,6 +164,32 @@ server. Event comparison uses a signature of the fields that matter rather than
 raw bytes, because `DTSTAMP` changes on every build and would otherwise make
 every run look like an update.
 
+## Development
+
+```bash
+uv sync                          # includes the dev group
+uv run pre-commit install        # once, to enable the git hook
+```
+
+Linting, formatting and type checking are enforced by a pre-commit hook:
+[ruff](https://docs.astral.sh/ruff/) (check + format) and
+[ty](https://github.com/astral-sh/ty). Run them over everything at any time:
+
+```bash
+uv run pre-commit run --all-files
+uv run ruff check --fix .
+uv run ruff format .
+uv run ty check
+```
+
+Two notes on the configuration:
+
+- `ty` is still pre-1.0 (0.0.x), so treat a new release as capable of changing
+  what it flags. Pin bumps in `.pre-commit-config.yaml` deserve a real look.
+- `caldav` ships no type information, so its classes resolve to `object`. The
+  one place that matters carries a targeted `# ty: ignore[call-non-callable]`
+  rather than the rule being switched off globally.
+
 ## Tests
 
 ```bash

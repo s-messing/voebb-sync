@@ -1,0 +1,29 @@
+# Install once with:  uv run pre-commit install
+# Run over everything: uv run pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.74
+    hooks:
+      - id: ty
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      # Fixtures are captured server output - keep them byte-faithful.
+      - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: trailing-whitespace
+        exclude: ^tests/fixtures/
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      # Belt and braces: .env is gitignored, but never let a secret through.
+      - id: detect-private-key

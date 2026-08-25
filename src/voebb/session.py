@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 BASE_URL = "https://www.voebb.de"
 START_URL = f"{BASE_URL}/aDISWeb/app/prod00"
@@ -32,6 +32,18 @@ USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+
+def _attr(tag: Tag, name: str, default: str = "") -> str:
+    """Read an attribute as a plain string.
+
+    BeautifulSoup returns a list for multi-valued attributes (class, rel), so
+    a bare .get() is not guaranteed to be a str.
+    """
+    value = tag.get(name, default)
+    if isinstance(value, list):
+        return " ".join(str(item) for item in value)
+    return default if value is None else str(value)
 
 
 class AdisError(RuntimeError):
@@ -83,25 +95,25 @@ class AdisSession:
 
         fields: dict[str, str] = {}
         for inp in form.find_all("input"):
-            name = inp.get("name")
+            name = _attr(inp, "name")
             if not name:
                 continue
-            kind = (inp.get("type") or "text").lower()
+            kind = (_attr(inp, "type") or "text").lower()
             if kind in ("submit", "button", "image", "reset"):
                 continue  # only sent when actually clicked
             if kind in ("checkbox", "radio") and not inp.has_attr("checked"):
                 continue
-            fields[name] = inp.get("value", "")
+            fields[name] = _attr(inp, "value")
         for sel in form.find_all("select"):
-            name = sel.get("name")
+            name = _attr(sel, "name")
             if not name:
                 continue
             chosen = sel.find("option", selected=True) or sel.find("option")
-            fields[name] = chosen.get("value", "") if chosen else ""
+            fields[name] = _attr(chosen, "value") if isinstance(chosen, Tag) else ""
 
         self.page = soup
         self.url = response.url
-        self.form = FormState(action=urljoin(response.url, form.get("action", "")), fields=fields)
+        self.form = FormState(action=urljoin(response.url, _attr(form, "action")), fields=fields)
         return soup
 
     def start(self) -> BeautifulSoup:
@@ -138,7 +150,7 @@ class AdisSession:
         if link is None:
             raise AdisError(f"no element with fld={fld!r} on {self.url}")
         if link.name == "input":  # a real submit button: send its name/value
-            return self.submit({link.get("name", fld): link.get("value", "")})
+            return self.submit({_attr(link, "name", fld): _attr(link, "value")})
         return self.submit({"keyCode": "0", "selected": _SELECT_PREFIX + fld})
 
     def at_start_page(self) -> bool:

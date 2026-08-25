@@ -91,7 +91,9 @@ def test_unrecognisable_page_raises():
 def test_column_lookup_survives_reordering():
     """Columns are found by header text, not position."""
     html = (FIXTURES / "loans.html").read_text(encoding="utf-8")
-    reordered = html.replace("Fällig am", "ZZZ").replace("Titel", "Fällig am").replace("ZZZ", "Titel")
+    reordered = (
+        html.replace("Fällig am", "ZZZ").replace("Titel", "Fällig am").replace("ZZZ", "Titel")
+    )
     parsed = parse_loans(BeautifulSoup(reordered, "lxml"))
     # Headers swapped, so the parser should now read the date cell as the title.
     assert parsed[0].title == "08.09.2026"

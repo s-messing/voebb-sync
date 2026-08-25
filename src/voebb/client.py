@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from bs4 import BeautifulSoup
 
 from .config import Credentials, load_credentials
@@ -33,7 +35,7 @@ class VoebbClient:
         self.session = AdisSession(**session_kwargs)
         self._logged_in = False
 
-    def __enter__(self) -> "VoebbClient":
+    def __enter__(self) -> VoebbClient:
         return self
 
     def __exit__(self, *exc_info) -> None:
@@ -42,10 +44,9 @@ class VoebbClient:
     def close(self) -> None:
         """Log out politely so the server drops the session."""
         if self._logged_in:
-            try:
+            # Best effort; logging out must never mask the real error.
+            with contextlib.suppress(Exception):
                 self.session.submit({"$Button$2": "Abmelden"})
-            except Exception:
-                pass  # best effort; never mask the real error
             self._logged_in = False
         self.session.http.close()
 
@@ -63,8 +64,7 @@ class VoebbClient:
         form = self.session.form
         if form is None or "LPASSW" not in form.fields:
             raise AdisError(
-                "expected the login form after opening 'Mein Konto', "
-                f"got {self.session.url}"
+                f"expected the login form after opening 'Mein Konto', got {self.session.url}"
             )
 
         page = self.session.submit(
@@ -108,9 +108,7 @@ class VoebbClient:
         us without JavaScript.
         """
         self._ensure_search_box()
-        page: BeautifulSoup = self.session.submit(
-            {"$Autosuggest": query, "$Button": "Suchen"}
-        )
+        page: BeautifulSoup = self.session.submit({"$Autosuggest": query, "$Button": "Suchen"})
         return parse_search_results(page)
 
     def _ensure_search_box(self) -> None:
@@ -121,6 +119,8 @@ class VoebbClient:
         """
         if self.session.form is None:
             self.session.start()
+        if self.session.form is None:
+            raise AdisError("could not open a session")
         if "$Autosuggest" in self.session.form.fields:
             return
         if self._logged_in:

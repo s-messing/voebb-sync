@@ -14,7 +14,9 @@ from .session import AdisError
 
 
 def _emit_json(rows: list) -> None:
-    print(json.dumps([dataclasses.asdict(r) for r in rows], default=str, ensure_ascii=False, indent=2))
+    print(
+        json.dumps([dataclasses.asdict(r) for r in rows], default=str, ensure_ascii=False, indent=2)
+    )
 
 
 def _cmd_loans(args: argparse.Namespace) -> int:
@@ -27,7 +29,7 @@ def _cmd_loans(args: argparse.Namespace) -> int:
         print("Keine Ausleihen.")
         return 0
     width = max(len(loan.title) for loan in loans)
-    for loan in sorted(loans, key=lambda l: (l.due_date is None, l.due_date)):
+    for loan in sorted(loans, key=lambda item: (item.due_date is None, item.due_date)):
         due = loan.due_date.strftime("%d.%m.%Y") if loan.due_date else "?"
         days = loan.days_left
         urgency = f"({days:+d} Tage)" if days is not None else ""
@@ -79,8 +81,10 @@ def _cmd_sync_calendar(args: argparse.Namespace) -> int:
     where = f"{config.calendar_name!r} auf {config.url}"
     if args.dry_run:
         if plan.calendar_missing:
-            print(f"! Kalender {config.calendar_name!r} existiert noch nicht "
-                  f"und würde angelegt werden.")
+            print(
+                f"! Kalender {config.calendar_name!r} existiert noch nicht "
+                f"und würde angelegt werden."
+            )
         print(f"\nProbelauf für {where} - nichts geändert.")
         print(plan.summary())
     elif plan.is_empty:
