@@ -1,0 +1,24 @@
+[project]
+name = "voebb"
+version = "0.1.0"
+description = "Programmatic read-only access to a VOEBB (Berlin public libraries) account"
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.32",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+voebb = "voebb.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voebb"]
