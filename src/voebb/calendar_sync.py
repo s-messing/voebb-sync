@@ -38,8 +38,17 @@ UID_DOMAIN = "@voebb.local"
 PRODID = "-//voebb//loan reminders//DE"
 
 
-def loan_uid(loan: Loan) -> str:
-    """A UID that stays the same for as long as the item is on loan."""
+def namespace(account: str) -> str:
+    """UID prefix owned by one library account."""
+    return f"{UID_PREFIX}{account}-"
+
+
+def loan_uid(loan: Loan, account: str) -> str:
+    """A UID that stays the same for as long as the item is on loan.
+
+    Namespaced per account so that two family members can share one calendar
+    without each sync deleting the other's events.
+    """
     if loan.item_number:
         identity = loan.item_number
     else:
@@ -47,10 +56,22 @@ def loan_uid(loan: Loan) -> str:
         # change while the item is out. Never include due_date or renewals.
         key = f"{loan.title}|{loan.library}|{loan.media_type}".encode()
         identity = hashlib.sha1(key).hexdigest()[:16]
-    return f"{UID_PREFIX}{identity}{UID_DOMAIN}"
+    return f"{namespace(account)}{identity}{UID_DOMAIN}"
 
 
-def build_event(loan: Loan, *, alarm_days: int, stamp: datetime | None = None) -> bytes:
+def owns(uid: str, account: str) -> bool:
+    """Whether this account's sync may modify or delete the given event."""
+    if uid.startswith(namespace(account)):
+        return True
+    # Events written before UIDs carried an account segment look like
+    # "voebb-<barcode>@...". Adopt them, so the reconcile replaces them rather
+    # than leaving them orphaned in the calendar forever.
+    return bool(re.fullmatch(rf"{re.escape(UID_PREFIX)}[^-]+@.*", uid))
+
+
+def build_event(
+    loan: Loan, *, alarm_days: int, account: str = "default", stamp: datetime | None = None
+) -> bytes:
     """Render one loan as a VCALENDAR containing a single all-day VEVENT."""
     if loan.due_date is None:
         raise ValueError(f"loan without a due date cannot be scheduled: {loan.title!r}")
@@ -61,7 +82,7 @@ def build_event(loan: Loan, *, alarm_days: int, stamp: datetime | None = None) -
     calendar.add("version", "2.0")
 
     event = Event()
-    event.add("uid", loan_uid(loan))
+    event.add("uid", loan_uid(loan, account))
     event.add("summary", f"Rückgabe: {loan.title}")
     event.add("location", loan.library)
     event.add("description", _describe(loan))
@@ -156,11 +177,17 @@ class SyncPlan:
         return ", ".join(parts)
 
 
-def plan_sync(loans: list[Loan], existing: dict[str, bytes], *, alarm_days: int) -> SyncPlan:
+def plan_sync(
+    loans: list[Loan],
+    existing: dict[str, bytes],
+    *,
+    alarm_days: int,
+    account: str = "default",
+) -> SyncPlan:
     """Diff desired events against what the calendar already holds.
 
-    `existing` maps UID -> iCal payload, and must contain only events this tool
-    owns; deleting anything else is not this function's business.
+    `existing` maps UID -> iCal payload and must already be filtered to the
+    events this account owns; deciding that is not this function's business.
     """
     plan = SyncPlan()
     desired: dict[str, bytes] = {}
@@ -169,8 +196,8 @@ def plan_sync(loans: list[Loan], existing: dict[str, bytes], *, alarm_days: int)
         if loan.due_date is None:
             plan.skipped.append(loan.title)
             continue
-        uid = loan_uid(loan)
-        desired[uid] = build_event(loan, alarm_days=alarm_days)
+        uid = loan_uid(loan, account)
+        desired[uid] = build_event(loan, alarm_days=alarm_days, account=account)
 
     for uid, ical in desired.items():
         current = existing.get(uid)
@@ -216,11 +243,12 @@ def _display_name(calendar: Any) -> str:
         return ""
 
 
-def fetch_managed_events(calendar: Any) -> tuple[dict[str, bytes], dict]:
-    """Return only the events this tool owns, keyed by UID.
+def fetch_managed_events(calendar: Any, account: str = "default") -> tuple[dict[str, bytes], dict]:
+    """Return only the events this account owns, keyed by UID.
 
-    Events without our UID prefix are ignored entirely, so the target calendar
-    can be one you also use for other things.
+    Events belonging to another account - or to nothing to do with this tool -
+    are ignored entirely, so one calendar can hold several people's loans and
+    whatever else you keep in it.
     """
     payloads: dict[str, bytes] = {}
     objects: dict = {}
@@ -229,7 +257,7 @@ def fetch_managed_events(calendar: Any) -> tuple[dict[str, bytes], dict]:
         if isinstance(data, str):
             data = data.encode()
         uid = _uid_of(data)
-        if uid and uid.startswith(UID_PREFIX):
+        if uid and owns(uid, account):
             payloads[uid] = data
             objects[uid] = event
     return payloads, objects
@@ -250,10 +278,10 @@ def sync(loans: list[Loan], config: NextcloudConfig, *, dry_run: bool = False) -
         existing, objects = {}, {}
         calendar_missing = True
     else:
-        existing, objects = fetch_managed_events(calendar)
+        existing, objects = fetch_managed_events(calendar, config.account)
         calendar_missing = False
 
-    plan = plan_sync(loans, existing, alarm_days=config.alarm_days)
+    plan = plan_sync(loans, existing, alarm_days=config.alarm_days, account=config.account)
     plan.calendar_missing = calendar_missing
 
     if dry_run:

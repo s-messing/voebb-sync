@@ -63,6 +63,10 @@ class VoebbClient:
 
         form = self.session.form
         if form is None or "LPASSW" not in form.fields:
+            if self.session.at_start_page():
+                raise SessionExpired(
+                    f"bounced back to the start page instead of the login form ({self.session.url})"
+                )
             raise AdisError(
                 f"expected the login form after opening 'Mein Konto', got {self.session.url}"
             )
@@ -84,8 +88,26 @@ class VoebbClient:
             raise AdisError(f"unexpected page after login: {self.session.url}")
         self._logged_in = True
 
+    def _reset_session(self) -> None:
+        """Throw the session away so the next call logs in from scratch."""
+        self.session = AdisSession(delay=self.session.delay, timeout=self.session.timeout)
+        self._logged_in = False
+
     def loans(self) -> list[Loan]:
-        """Currently borrowed items with their due dates."""
+        """Currently borrowed items with their due dates.
+
+        aDIS sessions expire on their own schedule, and the server signals it
+        by silently bouncing us to the start page rather than erroring. For an
+        unattended daily run that would mean a skipped day, so an expired
+        session is rebuilt and retried once.
+        """
+        try:
+            return self._loans()
+        except SessionExpired:
+            self._reset_session()
+            return self._loans()
+
+    def _loans(self) -> list[Loan]:
         self.login()
         # The loans screen is only reachable from the account overview - from a
         # search result page the *SZA code goes nowhere.

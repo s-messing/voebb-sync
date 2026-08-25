@@ -63,9 +63,14 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   event appearing next to it.
 - Items you have returned have their events deleted, so the calendar always
   mirrors your account.
-- **Only events whose UID starts with `voebb-` are ever modified or deleted.**
-  Anything else in the target calendar is left strictly alone, so it is safe to
-  point this at a calendar you also use for other things.
+- **Only events in this account's own UID namespace are ever modified or
+  deleted.** Anything else in the target calendar is left strictly alone, so it
+  is safe to point this at a calendar you also use for other things.
+- Because UIDs are namespaced per account (`voebb-<account>-<barcode>`),
+  **several people can share one calendar** and each sync only reconciles its
+  own events. `VOEBB_ACCOUNT` sets the label; it defaults to a short hash of
+  `VOEBB_USER`, so the library card number never appears in a UID that syncs
+  out to your devices.
 - `--dry-run` prints the full plan and writes nothing at all — not even
   creating the calendar.
 - Event descriptions carry only durable facts (branch, shelf mark, media
@@ -74,6 +79,11 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   dropped, so a description cannot go stale and does not churn the calendar
   when the site stops saying it. `Loan.note` keeps the raw text, so
   `voebb loans --json` still shows exactly what the site said.
+
+If a session drops mid-run — aDIS expires them on its own schedule and signals
+it by silently bouncing to the start page rather than erroring — the client
+rebuilds the session and retries once, so an unattended daily run does not skip
+a day over a transient hiccup.
 
 Configure it in `.env` (see `.env.example`). Use a Nextcloud **app password**
 (Settings → Security → Create new app password), not your login password —

@@ -67,14 +67,23 @@ def _cmd_sync_calendar(args: argparse.Namespace) -> int:
     with VoebbClient() as client:
         loans = client.loans()
 
-    titles = {loan_uid(loan): loan.title for loan in loans}
+    titles = {loan_uid(loan, config.account): loan.title for loan in loans}
     plan = sync(loans, config, dry_run=args.dry_run)
 
     for uid, label in (("+", "create"), ("~", "update")):
         for event_uid in getattr(plan, label):
             print(f"{uid} {titles.get(event_uid, event_uid)}")
+    # A delete usually means the item came back, but it can also be an event
+    # written under an older UID scheme being replaced. Tell them apart by the
+    # item number, so a migration is not reported as a return.
+    held = {loan.item_number for loan in loans if loan.item_number}
     for event_uid in plan.delete:
-        print(f"- {titles.get(event_uid, event_uid)}   (zurückgegeben)")
+        migrated = any(
+            f"-{number}@" in event_uid or event_uid.startswith(f"voebb-{number}@")
+            for number in held
+        )
+        reason = "ersetzt" if migrated else "zurückgegeben"
+        print(f"- {titles.get(event_uid, event_uid)}   ({reason})")
     for title in plan.skipped:
         print(f"? {title}   (kein Fälligkeitsdatum, übersprungen)")
 
