@@ -11,6 +11,7 @@ from voebb.calendar_sync import (
     UID_PREFIX,
     build_event,
     dav_root,
+    durable_note,
     event_signature,
     loan_uid,
     plan_sync,
@@ -97,6 +98,59 @@ class TestBuildEvent:
     def test_refuses_a_loan_without_a_due_date(self):
         with pytest.raises(ValueError):
             build_event(make_loan(due_date=None), alarm_days=3)
+
+
+class TestDurableNote:
+    """The Hinweis column mixes durable facts with wording that goes stale."""
+
+    @pytest.mark.parametrize(
+        "note,expected",
+        [
+            # "Heute" is relative to the scrape date - wrong by tomorrow.
+            ("Heute verlängert 3 Verlängerungen", ""),
+            ("Heute verlängert", ""),
+            # The count already has its own line in the description.
+            ("2 Verlängerungen", ""),
+            ("1 Verlängerung", ""),
+            # Anything genuinely informative survives.
+            ("nicht verlängerbar", "nicht verlängerbar"),
+            ("noch nicht möglich 1 Verlängerung", "noch nicht möglich"),
+            ("", ""),
+        ],
+    )
+    def test_strips_only_the_stale_and_redundant_parts(self, note, expected):
+        assert durable_note(note) == expected
+
+    def test_description_has_no_relative_wording(self):
+        loan = make_loan(note="Heute verlängert 3 Verlängerungen", renewals=3)
+        description = str(vevent(build_event(loan, alarm_days=3))["description"])
+        assert "Heute" not in description
+        # ...but the renewal count is still there, structurally.
+        assert "Verlängerungen: 3" in description
+
+    def test_does_not_repeat_the_renewal_count(self):
+        loan = make_loan(note="2 Verlängerungen", renewals=2)
+        description = str(vevent(build_event(loan, alarm_days=3))["description"])
+        assert description.count("Verlängerungen") == 1
+
+    def test_durable_hint_reaches_the_description(self):
+        loan = make_loan(note="nicht verlängerbar")
+        assert "nicht verlängerbar" in str(vevent(build_event(loan, alarm_days=3))["description"])
+
+    def test_no_churn_when_the_site_drops_the_phrase(self):
+        """Tomorrow the site stops saying "Heute verlängert". That must not
+        register as a change and trigger a pointless calendar update."""
+        today = make_loan(note="Heute verlängert 3 Verlängerungen", renewals=3)
+        tomorrow = make_loan(note="3 Verlängerungen", renewals=3)
+        assert event_signature(build_event(today, alarm_days=3)) == event_signature(
+            build_event(tomorrow, alarm_days=3)
+        )
+
+    def test_plan_sees_no_update_when_only_the_phrase_changed(self):
+        today = make_loan(note="Heute verlängert 3 Verlängerungen", renewals=3)
+        existing = dict(plan_sync([today], {}, alarm_days=3).create)
+        tomorrow = make_loan(note="3 Verlängerungen", renewals=3)
+        assert plan_sync([tomorrow], existing, alarm_days=3).is_empty
 
 
 class TestSignature:

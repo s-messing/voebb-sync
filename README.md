@@ -68,6 +68,12 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   point this at a calendar you also use for other things.
 - `--dry-run` prints the full plan and writes nothing at all — not even
   creating the calendar.
+- Event descriptions carry only durable facts (branch, shelf mark, media
+  number, renewal count, and hints like `nicht verlängerbar`). Wording that is
+  relative to the day it was scraped — the site's `Heute verlängert` — is
+  dropped, so a description cannot go stale and does not churn the calendar
+  when the site stops saying it. `Loan.note` keeps the raw text, so
+  `voebb loans --json` still shows exactly what the site said.
 
 Configure it in `.env` (see `.env.example`). Use a Nextcloud **app password**
 (Settings → Security → Create new app password), not your login password —

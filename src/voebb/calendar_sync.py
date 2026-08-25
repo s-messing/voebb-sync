@@ -15,6 +15,7 @@ renewal *move* an event rather than create a second one.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -24,6 +25,13 @@ from icalendar import Alarm, Calendar, Event
 
 from .config import NextcloudConfig
 from .models import Loan
+
+# Fragments of the Hinweis column that do not belong in a calendar event.
+# "Heute verlängert" is relative to the day it was scraped, so it would be
+# wrong by tomorrow; the renewal count already gets its own line. Whatever is
+# left (e.g. "nicht verlängerbar") is durable and worth keeping.
+_TRANSIENT_NOTE = re.compile(r"heute\s+verlängert", re.IGNORECASE)
+_REDUNDANT_NOTE = re.compile(r"\d+\s+Verlängerung(?:en)?", re.IGNORECASE)
 
 UID_PREFIX = "voebb-"
 UID_DOMAIN = "@voebb.local"
@@ -76,6 +84,12 @@ def build_event(loan: Loan, *, alarm_days: int, stamp: datetime | None = None) -
     return calendar.to_ical()
 
 
+def durable_note(note: str) -> str:
+    """Strip the parts of the Hinweis column that go stale or repeat."""
+    text = _REDUNDANT_NOTE.sub(" ", _TRANSIENT_NOTE.sub(" ", note))
+    return " ".join(text.split())
+
+
 def _describe(loan: Loan) -> str:
     lines = [loan.library]
     if loan.shelf_mark:
@@ -86,8 +100,8 @@ def _describe(loan: Loan) -> str:
         lines.append(f"Medienart: {loan.media_type}")
     if loan.renewals is not None:
         lines.append(f"Verlängerungen: {loan.renewals}")
-    if loan.note:
-        lines.append(loan.note)
+    if note := durable_note(loan.note):
+        lines.append(note)
     return "\n".join(lines)
 
 
