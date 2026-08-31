@@ -8,9 +8,11 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now voebb-sync.timer
 #
-# The image is private. This unit runs as root, so the login has to be root's
-# too - a login in your own account is not visible to it:
-#   sudo docker login ghcr.io -u <github-user>    # PAT with read:packages
+# The image is private. Log in ONCE, as root and with the same authfile the
+# unit uses below - a login in your own account is not visible to it, and one
+# without the authfile lands on tmpfs and is lost at the next reboot:
+#   sudo env DOCKER_CONFIG=/srv/voebb/docker \
+#     docker login ghcr.io -u <github-user>    # PAT with read:packages
 
 [Unit]
 Description=Sync VOEBB loans to the Nextcloud calendar
@@ -27,6 +29,10 @@ Type=oneshot
 
 # Compose file and .env both live here.
 WorkingDirectory=/srv/voebb
+
+# Keep the registry credentials with the rest of the service rather than in
+# /root/.docker. DOCKER_CONFIG names a directory, not a file.
+Environment=DOCKER_CONFIG=/srv/voebb/docker
 
 # Leading "-": an unreachable registry must not fail a sync that the local
 # image could have completed.

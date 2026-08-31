@@ -139,7 +139,8 @@ needs lives in `/srv/voebb`:
 | file | what it is |
 | --- | --- |
 | `compose.yaml` | the one-shot service definition |
-| `.env` | credentials, `chmod 600`, root-owned |
+| `.env` | account credentials, `chmod 600`, root-owned |
+| `auth.json` / `docker/` | registry credentials, written once by `login` |
 
 `deploy/` holds that file, the timer, and a service unit per engine — pick the
 one matching whichever of Docker or Podman you run, and install it under the
@@ -159,12 +160,24 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now voebb-sync.timer
 ```
 
-The image is private, and the unit runs as root, so the registry login must be
-root's — one in your own account is not visible to it:
+The image is private, so log in once. It has to be root's login — one in your
+own account is not visible to the unit — and it has to use the same authfile
+the unit sets, because Podman's default is `$XDG_RUNTIME_DIR`, which is tmpfs:
+a plain `podman login` is silently gone after a reboot, and the timer then just
+keeps reusing whatever image is already local.
 
 ```bash
-sudo podman login ghcr.io -u <github-user>      # or docker; PAT with read:packages
+# podman
+sudo env REGISTRY_AUTH_FILE=/srv/voebb/auth.json podman login ghcr.io -u <github-user>
+# docker
+sudo env DOCKER_CONFIG=/srv/voebb/docker docker login ghcr.io -u <github-user>
 ```
+
+That is a one-off, not something the unit repeats: logging in before every run
+would trade a stored credential for the same credential in another file, and
+add a failure mode where an auth hiccup breaks a sync the cached image could
+have served. Both files hold the token in cleartext (base64), so `chmod 600`
+them and keep them root-owned.
 
 The two units differ only in which binary they call; both run `compose up` from
 `/srv/voebb`, so the unit stays one `ExecStart` line and the parameters live in

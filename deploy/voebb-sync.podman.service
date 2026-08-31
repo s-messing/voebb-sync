@@ -8,9 +8,11 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now voebb-sync.timer
 #
-# The image is private. This unit runs as root, so the login has to be root's
-# too - a login in your own account is not visible to it:
-#   sudo podman login ghcr.io -u <github-user>    # PAT with read:packages
+# The image is private. Log in ONCE, as root and with the same authfile the
+# unit uses below - a login in your own account is not visible to it, and one
+# without the authfile lands on tmpfs and is lost at the next reboot:
+#   sudo env REGISTRY_AUTH_FILE=/srv/voebb/auth.json \
+#     podman login ghcr.io -u <github-user>    # PAT with read:packages
 
 [Unit]
 Description=Sync VOEBB loans to the Nextcloud calendar
@@ -23,6 +25,10 @@ Type=oneshot
 
 # Compose file and .env both live here.
 WorkingDirectory=/srv/voebb
+
+# podman writes credentials to $XDG_RUNTIME_DIR by default, which is tmpfs -
+# the login would not survive a reboot. Pin it next to the compose file.
+Environment=REGISTRY_AUTH_FILE=/srv/voebb/auth.json
 
 # Leading "-": an unreachable registry must not fail a sync that the local
 # image could have completed.
