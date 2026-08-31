@@ -14,3 +14,4 @@ trace/
 tests/
 scripts/
 .pre-commit-config.yaml
+deploy/

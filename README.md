@@ -113,10 +113,11 @@ integration at the same Nextcloud account and it will pick up the calendar as a
 
 CI publishes a multi-arch image to the GitHub Container Registry on every push
 to `main`, tagged `latest`, `main`, and `sha-<commit>`. It is one-shot: it runs
-the CLI once and exits, so it schedules like any other command.
+the CLI once and exits, so it schedules like any other command. Docker and
+Podman both run it unchanged.
 
 ```bash
-podman login ghcr.io -u <github-user>        # PAT with read:packages
+podman login ghcr.io -u <github-user>        # or docker login; PAT with read:packages
 podman run --rm --env-file .env ghcr.io/s-messing/voebb:latest sync-calendar --dry-run
 ```
 
@@ -132,18 +133,41 @@ rather than to a loop inside the program or the image: a timer gives restart
 handling, catch-up after downtime, and a failed run recorded in the journal,
 none of which an in-process `sleep` loop reports when it dies.
 
-`deploy/` holds a ready `systemd --user` timer that runs the container:
+Everything the service needs lives in one directory, `~/.config/voebb`:
+
+| file | what it is |
+| --- | --- |
+| `compose.yaml` | the one-shot service definition |
+| `.env` | credentials, `chmod 600` |
+| `voebb-sync` | picks an engine, pulls, runs `compose up` |
+
+`deploy/` holds all three plus the units:
 
 ```bash
+install -d -m 700 ~/.config/voebb
+install -m 644 deploy/compose.yaml ~/.config/voebb/
+install -m 755 deploy/voebb-sync   ~/.config/voebb/
+cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
 install -m 644 deploy/voebb-sync.{service,timer} ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now voebb-sync.timer
 ```
 
-Adjust `VOEBB_ENV_FILE` in the service if the credentials do not live in the
-checkout. `Persistent=true` catches up after the machine was off, and the pull
-is best-effort so an unreachable registry falls back to the local image instead
-of failing the sync.
+The unit is a single `ExecStart` pointing at `voebb-sync`, which keeps the
+engine choice out of the unit file. It prefers `docker compose` and falls back
+to `podman compose`, probing Docker with `docker info` rather than just looking
+for the binary — an installed Docker CLI whose socket is not readable is the
+normal state until `usermod -aG docker $USER` has taken effect, and probing
+catches that at detection time instead of at run time. Set `VOEBB_COMPOSE` to
+force one:
+
+```ini
+Environment=VOEBB_COMPOSE=podman compose
+```
+
+The pull is best-effort, so an unreachable registry falls back to the local
+image instead of failing the sync. `Persistent=true` catches up after the
+machine was off.
 
 ```bash
 systemctl --user list-timers voebb-sync.timer   # last run, next run
@@ -154,8 +178,8 @@ systemctl --user start voebb-sync.service       # run one now
 User timers only fire while you are logged in unless you enable lingering:
 `sudo loginctl enable-linger $USER`.
 
-To run the checkout directly instead of the container, point `ExecStart` at
-`%h/git/voebb/.venv/bin/voebb sync-calendar` and drop the `podman` lines.
+To run the checkout directly instead of a container, point `ExecStart` at
+`%h/git/voebb/.venv/bin/voebb sync-calendar` and drop `WorkingDirectory`.
 
 ## How it works
 

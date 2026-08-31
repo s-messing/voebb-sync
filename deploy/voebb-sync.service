@@ -1,11 +1,14 @@
-# Runs the published container once. Install into ~/.config/systemd/user/,
-# or copy and adjust the two paths marked below.
+# Install into ~/.config/systemd/user/ together with the timer:
 #
-#   systemctl --user daemon-reload
-#   systemctl --user enable --now voebb-sync.timer
+#   install -d ~/.config/voebb
+#   install -m 644 deploy/compose.yaml ~/.config/voebb/
+#   install -m 755 deploy/voebb-sync   ~/.config/voebb/
+#   cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
+#   install -m 644 deploy/voebb-sync.service deploy/voebb-sync.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now voebb-sync.timer
 #
-# The image is private, so podman needs a registry login first:
-#   podman login ghcr.io -u <github-user>      # PAT with read:packages
+# The image is private, so the engine needs a registry login first:
+#   docker login ghcr.io -u <github-user>   # or: podman login ghcr.io -u ...
 
 [Unit]
 Description=Sync VOEBB loans to the Nextcloud calendar
@@ -15,20 +18,14 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-Environment=VOEBB_IMAGE=ghcr.io/s-messing/voebb:latest
-# ADJUST: wherever the credentials live. Not baked into the image on purpose.
-Environment=VOEBB_ENV_FILE=%h/git/voebb/.env
 
-# Leading "-" so an unreachable registry is not a failed sync: the pull is
-# best-effort, then the run uses whatever image is already local.
-ExecStartPre=-/usr/bin/podman pull --quiet ${VOEBB_IMAGE}
-ExecStart=/usr/bin/podman run --rm --pull=never \
-    --name=voebb-sync \
-    --env-file=${VOEBB_ENV_FILE} \
-    ${VOEBB_IMAGE} sync-calendar
+# Everything the run needs - compose file, .env, the wrapper - is in here.
+WorkingDirectory=%h/.config/voebb
+ExecStart=%h/.config/voebb/voebb-sync
+
+# Force one engine instead of letting the wrapper choose:
+# Environment=VOEBB_COMPOSE=podman compose
 
 # A run that hangs must not sit on the timer until tomorrow.
 TimeoutStartSec=15min
-
-# podman writes the run to stdout/stderr; systemd files it under the unit name.
 SyslogIdentifier=voebb-sync

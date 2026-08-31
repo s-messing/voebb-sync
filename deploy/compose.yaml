@@ -1,0 +1,12 @@
+# Lives in the service directory (~/.config/voebb) next to .env, and is run
+# from there by the systemd unit. Deliberately plain: only keys that both
+# `docker compose` and `podman compose` understand.
+services:
+  voebb:
+    image: ghcr.io/s-messing/voebb:latest
+    container_name: voebb-sync
+    # Credentials stay beside this file, never in the image.
+    env_file: .env
+    command: ["sync-calendar"]
+    # One shot. Nothing here should come back up on its own.
+    restart: "no"
