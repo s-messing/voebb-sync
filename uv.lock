@@ -805,6 +805,7 @@ dependencies = [
     { name = "caldav" },
     { name = "icalendar" },
     { name = "lxml" },
+    { name = "niquests" },
     { name = "python-dotenv" },
     { name = "requests" },
 ]
@@ -823,6 +824,7 @@ requires-dist = [
     { name = "caldav", specifier = ">=3.2" },
     { name = "icalendar", specifier = ">=7.3" },
     { name = "lxml", specifier = ">=5.2" },
+    { name = "niquests", specifier = ">=3.14" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "requests", specifier = ">=2.32" },
 ]

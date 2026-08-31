@@ -109,46 +109,53 @@ integration at the same Nextcloud account and it will pick up the calendar as a
 `calendar.*` entity. Automations can then trigger with an offset, e.g.
 `offset: "-3 0:0:0"` to fire three days before an item is due.
 
-### Running it daily
+### Container image
 
-Nothing is installed for you. A `systemd --user` timer is the tidiest option on
-Debian:
-
-```ini
-# ~/.config/systemd/user/voebb-sync.service
-[Unit]
-Description=Sync VOEBB loans to Nextcloud calendar
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-WorkingDirectory=%h/git/voebb
-ExecStart=%h/git/voebb/.venv/bin/voebb sync-calendar
-```
-
-```ini
-# ~/.config/systemd/user/voebb-sync.timer
-[Unit]
-Description=Daily VOEBB loan sync
-
-[Timer]
-OnCalendar=*-*-* 07:00:00
-RandomizedDelaySec=30min
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
+CI publishes a multi-arch image to the GitHub Container Registry on every push
+to `main`, tagged `latest`, `main`, and `sha-<commit>`. It is one-shot: it runs
+the CLI once and exits, so it schedules like any other command.
 
 ```bash
+podman login ghcr.io -u <github-user>        # PAT with read:packages
+podman run --rm --env-file .env ghcr.io/s-messing/voebb:latest sync-calendar --dry-run
+```
+
+The package inherits the repository's visibility, so a login is required while
+the repo is private. No credentials are baked into the image: it reads the same
+environment variables as a local run, and `.dockerignore` keeps `.env` out of
+the build context entirely.
+
+### Running it daily
+
+The sync is a one-shot command by design, so scheduling belongs to systemd
+rather than to a loop inside the program or the image: a timer gives restart
+handling, catch-up after downtime, and a failed run recorded in the journal,
+none of which an in-process `sleep` loop reports when it dies.
+
+`deploy/` holds a ready `systemd --user` timer that runs the container:
+
+```bash
+install -m 644 deploy/voebb-sync.{service,timer} ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now voebb-sync.timer
 ```
 
-`Persistent=true` catches up after the machine was off. Note that user timers
-only fire while you are logged in unless you enable lingering:
+Adjust `VOEBB_ENV_FILE` in the service if the credentials do not live in the
+checkout. `Persistent=true` catches up after the machine was off, and the pull
+is best-effort so an unreachable registry falls back to the local image instead
+of failing the sync.
+
+```bash
+systemctl --user list-timers voebb-sync.timer   # last run, next run
+journalctl --user -u voebb-sync.service -n 50   # what it did
+systemctl --user start voebb-sync.service       # run one now
+```
+
+User timers only fire while you are logged in unless you enable lingering:
 `sudo loginctl enable-linger $USER`.
+
+To run the checkout directly instead of the container, point `ExecStart` at
+`%h/git/voebb/.venv/bin/voebb sync-calendar` and drop the `podman` lines.
 
 ## How it works
 

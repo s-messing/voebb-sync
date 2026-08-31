@@ -1,0 +1,34 @@
+# Runs the published container once. Install into ~/.config/systemd/user/,
+# or copy and adjust the two paths marked below.
+#
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now voebb-sync.timer
+#
+# The image is private, so podman needs a registry login first:
+#   podman login ghcr.io -u <github-user>      # PAT with read:packages
+
+[Unit]
+Description=Sync VOEBB loans to the Nextcloud calendar
+Documentation=https://github.com/s-messing/voebb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=VOEBB_IMAGE=ghcr.io/s-messing/voebb:latest
+# ADJUST: wherever the credentials live. Not baked into the image on purpose.
+Environment=VOEBB_ENV_FILE=%h/git/voebb/.env
+
+# Leading "-" so an unreachable registry is not a failed sync: the pull is
+# best-effort, then the run uses whatever image is already local.
+ExecStartPre=-/usr/bin/podman pull --quiet ${VOEBB_IMAGE}
+ExecStart=/usr/bin/podman run --rm --pull=never \
+    --name=voebb-sync \
+    --env-file=${VOEBB_ENV_FILE} \
+    ${VOEBB_IMAGE} sync-calendar
+
+# A run that hangs must not sit on the timer until tomorrow.
+TimeoutStartSec=15min
+
+# podman writes the run to stdout/stderr; systemd files it under the unit name.
+SyslogIdentifier=voebb-sync

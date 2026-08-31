@@ -7,10 +7,24 @@ import dataclasses
 import json
 import sys
 
+import niquests
+import requests
+from caldav.lib.error import DAVError
+
 from .calendar_sync import loan_uid, sync
 from .client import VoebbClient
 from .config import load_nextcloud_config
 from .session import AdisError
+
+# Everything a run can fail on that is not a bug: voebb.de (AdisError), the
+# calendar server (DAVError), and the two independent HTTP stacks underneath
+# them - requests for aDIS, niquests for CalDAV.
+FAILURES = (AdisError, DAVError, requests.RequestException, niquests.RequestException)
+
+
+def _reason(exc: BaseException) -> str:
+    """A one-liner for the journal. Bare transport errors stringify empty."""
+    return str(exc).strip() or exc.__class__.__name__
 
 
 def _emit_json(rows: list) -> None:
@@ -144,8 +158,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except AdisError as exc:
-        print(f"Fehler: {exc}", file=sys.stderr)
+    except FAILURES as exc:
+        # Unattended runs land in a journal, where a one-line cause is worth
+        # more than a traceback.
+        print(f"Fehler: {_reason(exc)}", file=sys.stderr)
         return 1
 
 

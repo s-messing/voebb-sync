@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily VOEBB loan sync
+Documentation=https://github.com/s-messing/voebb
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+# Spread the load on voebb.de rather than hitting it on the stroke of seven.
+RandomizedDelaySec=30min
+# Catch up after the machine was off, so a weekend away does not skip a run.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

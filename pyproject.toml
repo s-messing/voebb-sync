@@ -10,6 +10,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "caldav>=3.2",
     "icalendar>=7.3",
+    # Pulled in by caldav, but imported directly for its retry adapter and
+    # exception types, so it is declared rather than relied on transitively.
+    "niquests>=3.14",
 ]
 
 [project.scripts]
