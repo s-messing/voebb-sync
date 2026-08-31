@@ -19,6 +19,10 @@ jobs:
   check:
     name: lint, types, tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.13 is the requires-python floor; 3.14 is what the image ships.
+        python: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
 
@@ -27,6 +31,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+          python-version: ${{ matrix.python }}
 
       - name: Sync dependencies
         run: uv sync --locked
