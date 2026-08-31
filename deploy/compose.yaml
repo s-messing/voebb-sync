@@ -1,4 +1,4 @@
-# Lives in the service directory (/srv/voebb) next to .env, and is run
+# Lives in the service directory (~/.config/voebb) next to .env, and is run
 # from there by the systemd unit. Deliberately plain: only keys that both
 # `docker compose` and `podman compose` understand.
 services:
@@ -11,14 +11,3 @@ services:
     # Put one here only to run something else, e.g. ["sync-calendar", "--dry-run"].
     # One shot. Nothing here should come back up on its own.
     restart: "no"
-    # The container shares the host's network namespace. This is about DNS: a
-    # host whose /etc/resolv.conf lists 127.0.0.1 (a local resolver - dnsmasq,
-    # unbound, pi-hole) hands that file to the container unchanged, where
-    # 127.0.0.1 is the container's own empty loopback. Lookups then stall on a
-    # dead nameserver, and requests' timeout does not cover getaddrinfo, so the
-    # run hangs rather than failing. Sharing the namespace makes the host's
-    # resolver reachable and needs no site-specific address here.
-    #
-    # The alternative, if the container should keep its own namespace, is to
-    # name the real upstream instead:  dns: [172.17.17.250]
-    network_mode: host
