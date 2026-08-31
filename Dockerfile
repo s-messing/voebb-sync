@@ -44,5 +44,5 @@ WORKDIR /home/voebb
 
 # Credentials come from the environment (VOEBB_USER, VOEBB_PASSWORD,
 # NEXTCLOUD_*); there is no .env inside the image on purpose.
-ENTRYPOINT ["voebb"]
+ENTRYPOINT ["voebb-cli"]
 CMD ["sync-calendar"]

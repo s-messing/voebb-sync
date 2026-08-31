@@ -7,7 +7,7 @@ services:
     container_name: voebb-sync
     # Credentials stay beside this file, never in the image.
     env_file: .env
-    # No `command:` - the image already defaults to `voebb sync-calendar`.
+    # No `command:` - the image already defaults to `voebb-cli sync-calendar`.
     # Put one here only to run something else, e.g. ["sync-calendar", "--dry-run"].
     # One shot. Nothing here should come back up on its own.
     restart: "no"

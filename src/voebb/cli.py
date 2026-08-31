@@ -1,4 +1,4 @@
-"""Command line entry point: `voebb loans` / `voebb search "<query>"`."""
+"""Command line entry point: `voebb-cli loans` / `voebb search "<query>"`."""
 
 from __future__ import annotations
 
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     parser = argparse.ArgumentParser(
-        prog="voebb", description="Read a VOEBB library account.", parents=[common]
+        prog="voebb-cli", description="Read a VOEBB library account.", parents=[common]
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

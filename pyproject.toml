@@ -1,5 +1,5 @@
 [project]
-name = "voebb"
+name = "voebb-sync"
 version = "0.1.0"
 description = "Programmatic read-only access to a VOEBB (Berlin public libraries) account"
 license = "MIT"
@@ -21,7 +21,7 @@ dependencies = [
 Repository = "https://github.com/s-messing/voebb-sync"
 
 [project.scripts]
-voebb = "voebb.cli:main"
+voebb-cli = "voebb.cli:main"
 
 [dependency-groups]
 dev = [

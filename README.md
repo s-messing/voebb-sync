@@ -22,14 +22,14 @@ uv sync
 ## CLI
 
 ```bash
-uv run voebb loans                        # borrowed items, soonest due first
-uv run voebb --json loans                 # same, as JSON
-uv run voebb search "Kafka Verwandlung"   # catalogue search, no login needed
-uv run voebb search "Kafka" -n 20
+uv run voebb-cli loans                        # borrowed items, soonest due first
+uv run voebb-cli --json loans                 # same, as JSON
+uv run voebb-cli search "Kafka Verwandlung"   # catalogue search, no login needed
+uv run voebb-cli search "Kafka" -n 20
 
-uv run voebb sync-calendar --dry-run      # show what would change
-uv run voebb sync-calendar                # write reminders to Nextcloud
-uv run voebb sync-calendar --alarm-days 5 --calendar "Bibliothek"
+uv run voebb-cli sync-calendar --dry-run      # show what would change
+uv run voebb-cli sync-calendar                # write reminders to Nextcloud
+uv run voebb-cli sync-calendar --alarm-days 5 --calendar "Bibliothek"
 ```
 
 ```
@@ -55,7 +55,7 @@ context manager logs out at the end, which frees the session server-side.
 
 ## Due-date reminders
 
-`voebb sync-calendar` writes one all-day event per borrowed item into a CalDAV
+`voebb-cli sync-calendar` writes one all-day event per borrowed item into a CalDAV
 calendar, each with a reminder N days before the due date (`VOEBB_ALARM_DAYS`,
 default 3). Any CalDAV server works; Nextcloud is what it is tested against.
 
@@ -82,7 +82,7 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   relative to the day it was scraped — the site's `Heute verlängert` — is
   dropped, so a description cannot go stale and does not churn the calendar
   when the site stops saying it. `Loan.note` keeps the raw text, so
-  `voebb loans --json` still shows exactly what the site said.
+  `voebb-cli loans --json` still shows exactly what the site said.
 
 Two kinds of transient failure are handled, which matters once this runs
 unattended:
@@ -223,7 +223,7 @@ set — which is the reason to prefer system units on a server that runs
 unattended.
 
 To run a checkout directly instead of a container, point `ExecStart` at the
-`voebb sync-calendar` entry point in its virtualenv and drop `WorkingDirectory`.
+`voebb-cli sync-calendar` entry point in its virtualenv and drop `WorkingDirectory`.
 
 ## How it works
 
