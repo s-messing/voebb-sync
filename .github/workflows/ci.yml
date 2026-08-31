@@ -81,8 +81,8 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # On a pull request this builds but does not push, so a broken Dockerfile
-      # is caught before it reaches main.
+      # On a pull request this builds but does not push; `load` puts the
+      # single-arch build into the local daemon so the smoke test still runs.
       - name: Build and push
         id: build
         uses: docker/build-push-action@v6
@@ -90,13 +90,19 @@ jobs:
           context: .
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Pushes are tested against the pushed manifest by digest; pull requests
+      # against the locally loaded image. Either way the entrypoint must start.
       - name: Smoke test the image
-        if: github.event_name != 'pull_request'
         run: |
-          docker run --rm --pull=always \
-            ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }} --help
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            docker run --rm "$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n1)" --help
+          else
+            docker run --rm --pull=always \
+              ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }} --help
+          fi

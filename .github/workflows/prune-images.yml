@@ -1,0 +1,37 @@
+name: Prune old images
+
+# Private packages count against the plan's storage quota, and every push to
+# main adds a full multi-arch image under a new sha-* tag. Keep the moving
+# tags plus a window of recent SHAs and drop the rest.
+#
+# dataaxiom/ghcr-cleanup-action rather than delete-package-versions: the
+# per-arch manifests behind a multi-arch tag are themselves "untagged"
+# versions, and a manifest-unaware cleanup would delete them out from under
+# the tags that need them.
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: only report what would be deleted
+        type: boolean
+        default: false
+
+permissions:
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: voebb
+          exclude-tags: latest,main
+          keep-n-tagged: 10
+          delete-untagged: true
+          validate: true
+          dry-run: ${{ inputs.dry-run || false }}
+          token: ${{ secrets.GITHUB_TOKEN }}
