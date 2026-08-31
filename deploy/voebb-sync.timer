@@ -1,3 +1,5 @@
+# Install into /etc/systemd/system/ next to voebb-sync.service.
+
 [Unit]
 Description=Daily VOEBB loan sync
 Documentation=https://github.com/s-messing/voebb
@@ -6,7 +8,8 @@ Documentation=https://github.com/s-messing/voebb
 OnCalendar=*-*-* 07:00:00
 # Spread the load on voebb.de rather than hitting it on the stroke of seven.
 RandomizedDelaySec=30min
-# Catch up after the machine was off, so a weekend away does not skip a run.
+# Catch up after the machine was off, so a reboot at the wrong moment does not
+# skip a day.
 Persistent=true
 
 [Install]

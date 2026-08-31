@@ -133,56 +133,64 @@ rather than to a loop inside the program or the image: a timer gives restart
 handling, catch-up after downtime, and a failed run recorded in the journal,
 none of which an in-process `sleep` loop reports when it dies.
 
-Everything the service needs lives in one directory, `~/.config/voebb`:
+It is meant for a server, so these are **system** units. Everything the service
+needs lives in `/srv/voebb`:
 
 | file | what it is |
 | --- | --- |
 | `compose.yaml` | the one-shot service definition |
-| `.env` | credentials, `chmod 600` |
+| `.env` | credentials, `chmod 600`, root-owned |
 
 `deploy/` holds that file, the timer, and a service unit per engine — pick the
 one matching whichever of Docker or Podman you run, and install it under the
 name `voebb-sync.service` so the timer finds it:
 
 ```bash
-install -d -m 700 ~/.config/voebb
-install -m 644 deploy/compose.yaml ~/.config/voebb/
-cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
+sudo install -d -m 750 /srv/voebb
+sudo install -m 644 deploy/compose.yaml /srv/voebb/
+sudo install -m 600 .env /srv/voebb/.env
 
 # one of these two
-install -m 644 deploy/voebb-sync.podman.service ~/.config/systemd/user/voebb-sync.service
-install -m 644 deploy/voebb-sync.docker.service ~/.config/systemd/user/voebb-sync.service
+sudo install -m 644 deploy/voebb-sync.podman.service /etc/systemd/system/voebb-sync.service
+sudo install -m 644 deploy/voebb-sync.docker.service /etc/systemd/system/voebb-sync.service
 
-install -m 644 deploy/voebb-sync.timer ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now voebb-sync.timer
+sudo install -m 644 deploy/voebb-sync.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now voebb-sync.timer
+```
+
+The image is private, and the unit runs as root, so the registry login must be
+root's — one in your own account is not visible to it:
+
+```bash
+sudo podman login ghcr.io -u <github-user>      # or docker; PAT with read:packages
 ```
 
 The two units differ only in which binary they call; both run `compose up` from
-`~/.config/voebb`, so the unit stays one `ExecStart` line and the parameters
-live in `compose.yaml`. `--exit-code-from` is not optional: a plain
-`compose up` exits 0 even when the container failed, which would report every
-broken sync to the timer as a success.
-
-Docker's socket is not readable by an ordinary user until `usermod -aG docker
-$USER` has taken effect — if the Docker unit fails with a permission error on
-`/var/run/docker.sock`, that is why, and the Podman unit needs no such setup.
+`/srv/voebb`, so the unit stays one `ExecStart` line and the parameters live in
+`compose.yaml`. `--exit-code-from` is not optional: a plain `compose up` exits 0
+even when the container failed, which would report every broken sync to the
+timer as a success.
 
 The pull is best-effort, so an unreachable registry falls back to the local
 image instead of failing the sync. `Persistent=true` catches up after the
 machine was off.
 
 ```bash
-systemctl --user list-timers voebb-sync.timer   # last run, next run
-journalctl --user -u voebb-sync.service -n 50   # what it did
-systemctl --user start voebb-sync.service       # run one now
+systemctl list-timers voebb-sync.timer   # last run, next run
+journalctl -u voebb-sync.service -n 50   # what it did
+sudo systemctl start voebb-sync.service  # run one now
 ```
 
-User timers only fire while you are logged in unless you enable lingering:
-`sudo loginctl enable-linger $USER`.
+On a workstation you can run these as `systemd --user` units instead: put the
+files in `~/.config/systemd/user/`, point `WorkingDirectory` somewhere you own,
+and note that `%h` resolves differently in the two scopes. User timers also
+only fire while you are logged in unless `sudo loginctl enable-linger $USER` is
+set — which is the reason to prefer system units on a server that runs
+unattended.
 
-To run the checkout directly instead of a container, point `ExecStart` at
-`%h/git/voebb/.venv/bin/voebb sync-calendar` and drop `WorkingDirectory`.
+To run a checkout directly instead of a container, point `ExecStart` at the
+`voebb sync-calendar` entry point in its virtualenv and drop `WorkingDirectory`.
 
 ## How it works
 

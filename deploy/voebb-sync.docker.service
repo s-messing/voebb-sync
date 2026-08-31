@@ -1,27 +1,32 @@
 # The docker variant. Pick one, install it as voebb-sync.service:
 #
-#   install -d -m 700 ~/.config/voebb
-#   install -m 644 deploy/compose.yaml ~/.config/voebb/
-#   cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
-#   install -m 644 deploy/voebb-sync.docker.service ~/.config/systemd/user/voebb-sync.service
-#   install -m 644 deploy/voebb-sync.timer           ~/.config/systemd/user/
-#   systemctl --user daemon-reload
-#   systemctl --user enable --now voebb-sync.timer
+#   sudo install -d -m 750 /srv/voebb
+#   sudo install -m 644 deploy/compose.yaml /srv/voebb/
+#   sudo install -m 600 .env /srv/voebb/.env
+#   sudo install -m 644 deploy/voebb-sync.docker.service /etc/systemd/system/voebb-sync.service
+#   sudo install -m 644 deploy/voebb-sync.timer           /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now voebb-sync.timer
 #
-# The image is private, so log in first:
-#   docker login ghcr.io -u <github-user>    # PAT with read:packages
+# The image is private. This unit runs as root, so the login has to be root's
+# too - a login in your own account is not visible to it:
+#   sudo docker login ghcr.io -u <github-user>    # PAT with read:packages
 
 [Unit]
 Description=Sync VOEBB loans to the Nextcloud calendar
 Documentation=https://github.com/s-messing/voebb
 After=network-online.target
 Wants=network-online.target
+# Wants, not Requires: if the daemon is down the run fails on its own and says
+# so, rather than the timer being torn down with it.
+After=docker.service
+Wants=docker.service
 
 [Service]
 Type=oneshot
 
 # Compose file and .env both live here.
-WorkingDirectory=%h/.config/voebb
+WorkingDirectory=/srv/voebb
 
 # Leading "-": an unreachable registry must not fail a sync that the local
 # image could have completed.
