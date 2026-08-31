@@ -30,9 +30,13 @@ WorkingDirectory=/srv/voebb
 # the login would not survive a reboot. Pin it next to the compose file.
 Environment=REGISTRY_AUTH_FILE=/srv/voebb/auth.json
 
+# Clear out the previous run's container first. `compose up` leaves it behind,
+# and a second run then collides with its own fixed container_name.
+ExecStartPre=-/usr/bin/podman compose down --remove-orphans
+
 # Leading "-": an unreachable registry must not fail a sync that the local
-# image could have completed.
-ExecStartPre=-/usr/bin/podman compose pull --quiet voebb
+# image could have completed. Note podman-compose has no --quiet on pull.
+ExecStartPre=-/usr/bin/podman compose pull voebb
 # --exit-code-from matters: a plain `compose up` exits 0 even when the
 # container failed, which would report every broken sync as a success.
 ExecStart=/usr/bin/podman compose up --abort-on-container-exit --exit-code-from voebb

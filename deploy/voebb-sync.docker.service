@@ -34,8 +34,12 @@ WorkingDirectory=/srv/voebb
 # /root/.docker. DOCKER_CONFIG names a directory, not a file.
 Environment=DOCKER_CONFIG=/srv/voebb/docker
 
+# Clear out the previous run's container first. `compose up` leaves it behind,
+# and a second run then collides with its own fixed container_name.
+ExecStartPre=-/usr/bin/docker compose down --remove-orphans
+
 # Leading "-": an unreachable registry must not fail a sync that the local
-# image could have completed.
+# image could have completed. Note podman-compose has no --quiet on pull.
 ExecStartPre=-/usr/bin/docker compose pull --quiet voebb
 # --exit-code-from matters: a plain `compose up` exits 0 even when the
 # container failed, which would report every broken sync as a success.
