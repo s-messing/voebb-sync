@@ -16,7 +16,7 @@
 
 [Unit]
 Description=Sync VOEBB loans to the Nextcloud calendar
-Documentation=https://github.com/s-messing/voebb
+Documentation=https://github.com/s-messing/voebb-sync
 After=network-online.target
 Wants=network-online.target
 # Wants, not Requires: if the daemon is down the run fails on its own and says

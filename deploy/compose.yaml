@@ -3,7 +3,7 @@
 # `docker compose` and `podman compose` understand.
 services:
   voebb:
-    image: ghcr.io/s-messing/voebb:latest
+    image: ghcr.io/s-messing/voebb-sync:latest
     container_name: voebb-sync
     # Credentials stay beside this file, never in the image.
     env_file: .env

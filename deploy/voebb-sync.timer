@@ -2,7 +2,7 @@
 
 [Unit]
 Description=Daily VOEBB loan sync
-Documentation=https://github.com/s-messing/voebb
+Documentation=https://github.com/s-messing/voebb-sync
 
 [Timer]
 OnCalendar=*-*-* 07:00:00

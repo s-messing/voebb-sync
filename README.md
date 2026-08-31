@@ -1,7 +1,10 @@
-# voebb
+# voebb-sync
 
 Read-only programmatic access to a [VÖBB](https://www.voebb.de) library account
 (Verbund der Öffentlichen Bibliotheken Berlins) from Python.
+
+An unofficial personal project, not affiliated with or endorsed by the VÖBB,
+the ZLB, or the VÖBB-Servicezentrum.
 
 VÖBB has no public API, so this is a scraping client for the aDIS/BMS web app.
 It reads your current loans, searches the catalogue, and mirrors due dates into
@@ -120,7 +123,7 @@ Podman both run it unchanged.
 
 ```bash
 podman login ghcr.io -u <github-user>        # or docker login; PAT with read:packages
-podman run --rm --env-file .env ghcr.io/s-messing/voebb:latest sync-calendar --dry-run
+podman run --rm --env-file .env ghcr.io/s-messing/voebb-sync:latest sync-calendar --dry-run
 ```
 
 The package inherits the repository's visibility, so a login is required while
@@ -202,8 +205,8 @@ fine, the container's network cannot reach the nameserver it was given. Check
 what it actually got, and whether it can use it:
 
 ```bash
-podman run --rm --entrypoint cat ghcr.io/s-messing/voebb:latest /etc/resolv.conf
-podman run --rm --entrypoint getent ghcr.io/s-messing/voebb:latest hosts www.voebb.de
+podman run --rm --entrypoint cat ghcr.io/s-messing/voebb-sync:latest /etc/resolv.conf
+podman run --rm --entrypoint getent ghcr.io/s-messing/voebb-sync:latest hosts www.voebb.de
 ```
 
 This is host-specific, so fix it in the deployed `compose.yaml` rather than

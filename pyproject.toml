@@ -2,6 +2,8 @@
 name = "voebb"
 version = "0.1.0"
 description = "Programmatic read-only access to a VOEBB (Berlin public libraries) account"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "requests>=2.32",
@@ -14,6 +16,9 @@ dependencies = [
     # exception types, so it is declared rather than relied on transitively.
     "niquests>=3.14",
 ]
+
+[project.urls]
+Repository = "https://github.com/s-messing/voebb-sync"
 
 [project.scripts]
 voebb = "voebb.cli:main"
