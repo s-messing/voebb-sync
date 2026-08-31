@@ -139,31 +139,34 @@ Everything the service needs lives in one directory, `~/.config/voebb`:
 | --- | --- |
 | `compose.yaml` | the one-shot service definition |
 | `.env` | credentials, `chmod 600` |
-| `voebb-sync` | picks an engine, pulls, runs `compose up` |
 
-`deploy/` holds all three plus the units:
+`deploy/` holds that file, the timer, and a service unit per engine — pick the
+one matching whichever of Docker or Podman you run, and install it under the
+name `voebb-sync.service` so the timer finds it:
 
 ```bash
 install -d -m 700 ~/.config/voebb
 install -m 644 deploy/compose.yaml ~/.config/voebb/
-install -m 755 deploy/voebb-sync   ~/.config/voebb/
 cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
-install -m 644 deploy/voebb-sync.{service,timer} ~/.config/systemd/user/
+
+# one of these two
+install -m 644 deploy/voebb-sync.podman.service ~/.config/systemd/user/voebb-sync.service
+install -m 644 deploy/voebb-sync.docker.service ~/.config/systemd/user/voebb-sync.service
+
+install -m 644 deploy/voebb-sync.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now voebb-sync.timer
 ```
 
-The unit is a single `ExecStart` pointing at `voebb-sync`, which keeps the
-engine choice out of the unit file. It prefers `docker compose` and falls back
-to `podman compose`, probing Docker with `docker info` rather than just looking
-for the binary — an installed Docker CLI whose socket is not readable is the
-normal state until `usermod -aG docker $USER` has taken effect, and probing
-catches that at detection time instead of at run time. Set `VOEBB_COMPOSE` to
-force one:
+The two units differ only in which binary they call; both run `compose up` from
+`~/.config/voebb`, so the unit stays one `ExecStart` line and the parameters
+live in `compose.yaml`. `--exit-code-from` is not optional: a plain
+`compose up` exits 0 even when the container failed, which would report every
+broken sync to the timer as a success.
 
-```ini
-Environment=VOEBB_COMPOSE=podman compose
-```
+Docker's socket is not readable by an ordinary user until `usermod -aG docker
+$USER` has taken effect — if the Docker unit fails with a permission error on
+`/var/run/docker.sock`, that is why, and the Podman unit needs no such setup.
 
 The pull is best-effort, so an unreachable registry falls back to the local
 image instead of failing the sync. `Persistent=true` catches up after the

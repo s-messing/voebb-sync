@@ -1,0 +1,35 @@
+# The podman variant. Pick one, install it as voebb-sync.service:
+#
+#   install -d -m 700 ~/.config/voebb
+#   install -m 644 deploy/compose.yaml ~/.config/voebb/
+#   cp .env ~/.config/voebb/.env && chmod 600 ~/.config/voebb/.env
+#   install -m 644 deploy/voebb-sync.podman.service ~/.config/systemd/user/voebb-sync.service
+#   install -m 644 deploy/voebb-sync.timer           ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now voebb-sync.timer
+#
+# The image is private, so log in first:
+#   podman login ghcr.io -u <github-user>    # PAT with read:packages
+
+[Unit]
+Description=Sync VOEBB loans to the Nextcloud calendar
+Documentation=https://github.com/s-messing/voebb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Compose file and .env both live here.
+WorkingDirectory=%h/.config/voebb
+
+# Leading "-": an unreachable registry must not fail a sync that the local
+# image could have completed.
+ExecStartPre=-/usr/bin/podman compose pull --quiet voebb
+# --exit-code-from matters: a plain `compose up` exits 0 even when the
+# container failed, which would report every broken sync as a success.
+ExecStart=/usr/bin/podman compose up --abort-on-container-exit --exit-code-from voebb
+
+# A run that hangs must not sit on the timer until tomorrow.
+TimeoutStartSec=15min
+SyslogIdentifier=voebb-sync
