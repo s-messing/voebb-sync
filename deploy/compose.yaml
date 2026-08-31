@@ -1,4 +1,4 @@
-# Lives in the service directory (~/.config/voebb) next to .env, and is run
+# Lives in the service directory (/srv/voebb) next to .env, and is run
 # from there by the systemd unit. Deliberately plain: only keys that both
 # `docker compose` and `podman compose` understand.
 services:

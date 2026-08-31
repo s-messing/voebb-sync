@@ -195,6 +195,21 @@ journalctl -u voebb-sync.service -n 50   # what it did
 sudo systemctl start voebb-sync.service  # run one now
 ```
 
+If a run hangs or fails to resolve `www.voebb.de` while the host resolves it
+fine, the container's network cannot reach the nameserver it was given. Check
+what it actually got, and whether it can use it:
+
+```bash
+podman run --rm --entrypoint cat ghcr.io/s-messing/voebb:latest /etc/resolv.conf
+podman run --rm --entrypoint getent ghcr.io/s-messing/voebb:latest hosts www.voebb.de
+```
+
+This is host-specific, so fix it in the deployed `compose.yaml` rather than
+here: name a reachable resolver with `dns: [<address>]`, or fall back to
+`network_mode: host`. Worth knowing that a hang is the likely symptom rather
+than an error - `requests` timeouts cover connect and read, not `getaddrinfo`,
+so a black-holed nameserver blocks until `TimeoutStartSec` fires.
+
 On a workstation you can run these as `systemd --user` units instead: put the
 files in `~/.config/systemd/user/`, point `WorkingDirectory` somewhere you own,
 and note that `%h` resolves differently in the two scopes. User timers also
