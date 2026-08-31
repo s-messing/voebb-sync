@@ -2,7 +2,7 @@
 
 # Build the virtualenv with uv, then copy just the venv into a clean runtime.
 # Both stages sit on the same trixie-slim Python, so the venv stays valid.
-FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim AS build
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS build
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 
-FROM python:3.13-slim-trixie
+FROM python:3.14-slim-trixie
 
 # tzdata because Loan.days_left is computed from the local date - without it a
 # container defaults to UTC and rolls over an hour early in Berlin summer time.
