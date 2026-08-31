@@ -5,7 +5,8 @@ Read-only programmatic access to a [VÖBB](https://www.voebb.de) library account
 
 VÖBB has no public API, so this is a scraping client for the aDIS/BMS web app.
 It reads your current loans, searches the catalogue, and mirrors due dates into
-a Nextcloud calendar so you get reminded before anything is overdue. It
+a CalDAV calendar (Nextcloud, Radicale, Baïkal, ...) so you get reminded before
+anything is overdue. It
 deliberately does **not** renew, reserve, or cancel anything.
 
 ## Setup
@@ -51,9 +52,9 @@ context manager logs out at the end, which frees the session server-side.
 
 ## Due-date reminders
 
-`voebb sync-calendar` writes one all-day event per borrowed item into a
-Nextcloud calendar over CalDAV, each with a reminder N days before the due date
-(`VOEBB_ALARM_DAYS`, default 3).
+`voebb sync-calendar` writes one all-day event per borrowed item into a CalDAV
+calendar, each with a reminder N days before the due date (`VOEBB_ALARM_DAYS`,
+default 3). Any CalDAV server works; Nextcloud is what it is tested against.
 
 The sync is **idempotent and reconciling**: run it as often as you like.
 
@@ -97,10 +98,11 @@ unattended:
 Exhausted retries surface as an error rather than an empty result, so a failed
 fetch can never be mistaken for "no loans" and quietly wipe the calendar.
 
-Configure it in `.env` (see `.env.example`). Use a Nextcloud **app password**
-(Settings → Security → Create new app password), not your login password —
-it is revocable and works with 2FA. `NEXTCLOUD_URL` accepts either the bare host
-or a full `/remote.php/dav` root.
+Configure it in `.env` (see `.env.example`). `CALDAV_URL` is taken verbatim —
+point it at your server's DAV root. Nextcloud users can set `NEXTCLOUD_URL`
+instead, which also accepts a bare host and completes it to `/remote.php/dav`;
+use an **app password** (Settings → Security → Create new app password), not
+your login password — it is revocable and works with 2FA.
 
 ### Home Assistant
 

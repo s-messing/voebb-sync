@@ -13,7 +13,7 @@ from caldav.lib.error import DAVError
 
 from .calendar_sync import loan_uid, sync
 from .client import VoebbClient
-from .config import load_nextcloud_config
+from .config import load_caldav_config
 from .session import AdisError
 
 # Everything a run can fail on that is not a bug: voebb.de (AdisError), the
@@ -72,7 +72,7 @@ def _cmd_search(args: argparse.Namespace) -> int:
 
 
 def _cmd_sync_calendar(args: argparse.Namespace) -> int:
-    config = load_nextcloud_config()
+    config = load_caldav_config()
     if args.calendar:
         config = dataclasses.replace(config, calendar_name=args.calendar)
     if args.alarm_days is not None:
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sync_cal = sub.add_parser(
         "sync-calendar",
-        help="mirror loans into the Nextcloud calendar as reminders",
+        help="mirror loans into a CalDAV calendar as reminders",
     )
     sync_cal.add_argument(
         "--dry-run", action="store_true", help="show what would change, change nothing"

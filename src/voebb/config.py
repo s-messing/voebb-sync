@@ -50,40 +50,61 @@ def derive_account(user: str, salt: str = "") -> str:
     return hashlib.sha1(f"{salt}:{user}".encode()).hexdigest()[:8]
 
 
+def dav_root(url: str) -> str:
+    """Complete a bare Nextcloud host to its DAV root.
+
+    Applied only to NEXTCLOUD_URL - CALDAV_URL is taken verbatim, because on
+    any other server there is nothing sensible to append.
+    """
+    url = url.rstrip("/")
+    return url if "/remote.php" in url else f"{url}/remote.php/dav"
+
+
 DEFAULT_CALENDAR_NAME = "VÖBB Leihfristen"
 DEFAULT_ALARM_DAYS = 3
 
 
 @dataclass(frozen=True)
-class NextcloudConfig:
-    """Where to write loan reminders, and how far ahead to warn."""
+class CaldavConfig:
+    """Where to write loan reminders, and how far ahead to warn.
+
+    `url` is the full DAV root, already resolved by `load_caldav_config`.
+    """
 
     url: str
     user: str
-    app_password: str
+    password: str
     calendar_name: str = DEFAULT_CALENDAR_NAME
     alarm_days: int = DEFAULT_ALARM_DAYS
     account: str = "default"
 
     def __repr__(self) -> str:  # keep secrets out of tracebacks and logs
         return (
-            f"NextcloudConfig(url={self.url!r}, user={self.user!r}, "
-            f"app_password=***, calendar_name={self.calendar_name!r}, "
+            f"CaldavConfig(url={self.url!r}, user={self.user!r}, "
+            f"password=***, calendar_name={self.calendar_name!r}, "
             f"alarm_days={self.alarm_days}, account={self.account!r})"
         )
 
 
-def load_nextcloud_config() -> NextcloudConfig:
-    """Read the Nextcloud CalDAV settings from .env or the environment."""
+def load_caldav_config() -> CaldavConfig:
+    """Read the CalDAV settings from .env or the environment.
+
+    Both spellings work: CALDAV_* names any server and is used verbatim,
+    NEXTCLOUD_* additionally accepts a bare host and completes it to
+    Nextcloud's /remote.php/dav. CALDAV_* wins where both are set.
+    """
     load_dotenv()
-    url = os.getenv("NEXTCLOUD_URL", "").strip().rstrip("/")
-    user = os.getenv("NEXTCLOUD_USER", "").strip()
-    app_password = os.getenv("NEXTCLOUD_APP_PASSWORD", "")
-    if not url or not user or not app_password:
+    caldav_url = os.getenv("CALDAV_URL", "").strip().rstrip("/")
+    nextcloud_url = os.getenv("NEXTCLOUD_URL", "").strip().rstrip("/")
+    url = caldav_url or (dav_root(nextcloud_url) if nextcloud_url else "")
+    user = os.getenv("CALDAV_USER", "").strip() or os.getenv("NEXTCLOUD_USER", "").strip()
+    password = os.getenv("CALDAV_PASSWORD", "") or os.getenv("NEXTCLOUD_APP_PASSWORD", "")
+    if not url or not user or not password:
         raise SystemExit(
-            "NEXTCLOUD_URL, NEXTCLOUD_USER and NEXTCLOUD_APP_PASSWORD must be set.\n"
-            "See .env.example. Create the app password under "
-            "Nextcloud > Settings > Security > Create new app password."
+            "CALDAV_URL, CALDAV_USER and CALDAV_PASSWORD must be set\n"
+            "(or, for Nextcloud, NEXTCLOUD_URL / NEXTCLOUD_USER / NEXTCLOUD_APP_PASSWORD).\n"
+            "See .env.example. On Nextcloud, create an app password under "
+            "Settings > Security > Create new app password."
         )
 
     raw_days = os.getenv("VOEBB_ALARM_DAYS", "").strip()
@@ -103,10 +124,10 @@ def load_nextcloud_config() -> NextcloudConfig:
         else derive_account(os.getenv("VOEBB_USER", "").strip(), salt=user)
     )
 
-    return NextcloudConfig(
+    return CaldavConfig(
         url=url,
         user=user,
-        app_password=app_password,
+        password=password,
         calendar_name=os.getenv("VOEBB_CALENDAR_NAME", "").strip() or DEFAULT_CALENDAR_NAME,
         alarm_days=alarm_days,
         account=account,

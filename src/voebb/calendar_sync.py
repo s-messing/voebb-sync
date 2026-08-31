@@ -24,7 +24,7 @@ import caldav
 from icalendar import Alarm, Calendar, Event
 from niquests.adapters import HTTPAdapter as NiquestsHTTPAdapter
 
-from .config import NextcloudConfig
+from .config import CaldavConfig
 from .models import Loan
 from .session import build_retry
 
@@ -216,7 +216,7 @@ def plan_sync(
     return plan
 
 
-def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None:
+def open_calendar(config: CaldavConfig, *, create: bool = True) -> Any | None:
     """Find the configured calendar.
 
     With `create=False` a missing calendar yields None instead of being
@@ -225,9 +225,9 @@ def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None
     # caldav ships no py.typed, so its classes resolve to `object` and every
     # call through them looks non-callable to the type checker.
     client = caldav.DAVClient(  # ty: ignore[call-non-callable]
-        url=dav_root(config.url),
+        url=config.url,
         username=config.user,
-        password=config.app_password,
+        password=config.password,
         # caldav defaults to no timeout at all, so a stalled server would hang
         # the run until systemd's TimeoutStartSec kills it. Same budget as the
         # aDIS side.
@@ -244,12 +244,6 @@ def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None
         if _display_name(calendar) == config.calendar_name:
             return calendar
     return principal.make_calendar(name=config.calendar_name) if create else None
-
-
-def dav_root(url: str) -> str:
-    """Accept either a bare Nextcloud host or a full DAV root."""
-    url = url.rstrip("/")
-    return url if "/remote.php" in url else f"{url}/remote.php/dav"
 
 
 def _display_name(calendar: Any) -> str:
@@ -286,7 +280,7 @@ def _uid_of(ical: bytes) -> str | None:
     return None
 
 
-def sync(loans: list[Loan], config: NextcloudConfig, *, dry_run: bool = False) -> SyncPlan:
+def sync(loans: list[Loan], config: CaldavConfig, *, dry_run: bool = False) -> SyncPlan:
     """Reconcile the calendar against the current loan list."""
     calendar = open_calendar(config, create=not dry_run)
     if calendar is None:

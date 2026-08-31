@@ -11,7 +11,6 @@ from icalendar import Calendar
 from voebb.calendar_sync import (
     UID_PREFIX,
     build_event,
-    dav_root,
     durable_note,
     event_signature,
     loan_uid,
@@ -243,6 +242,8 @@ class TestPlanSync:
     ],
 )
 def test_dav_root_accepts_bare_host_or_full_path(given, expected):
+    from voebb.config import dav_root
+
     assert dav_root(given) == expected
 
 
@@ -320,7 +321,7 @@ def test_dav_client_gets_a_timeout(monkeypatch):
     import caldav
 
     from voebb.calendar_sync import open_calendar
-    from voebb.config import NextcloudConfig
+    from voebb.config import CaldavConfig
 
     seen = {}
 
@@ -340,7 +341,7 @@ def test_dav_client_gets_a_timeout(monkeypatch):
             raise Stop
 
     monkeypatch.setattr(caldav, "DAVClient", FakeClient)
-    config = NextcloudConfig(url="https://cloud.example.de", user="u", app_password="p")
+    config = CaldavConfig(url="https://cloud.example.de", user="u", password="p")
     with pytest.raises(Stop):
         open_calendar(config)
     assert seen.get("timeout"), "DAVClient must be given a finite timeout"
