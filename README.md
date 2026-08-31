@@ -68,7 +68,7 @@ The sync is **idempotent and reconciling**: run it as often as you like.
   is safe to point this at a calendar you also use for other things.
 - Because UIDs are namespaced per account (`voebb-<account>-<barcode>`),
   **several people can share one calendar** and each sync only reconciles its
-  own events. `VOEBB_ACCOUNT` sets the label; it defaults to a short hash of
+  own events. `VOEBB_ACCOUNT` sets the label; it defaults to a short salted hash of
   `VOEBB_USER`, so the library card number never appears in a UID that syncs
   out to your devices.
 - `--dry-run` prints the full plan and writes nothing at all — not even

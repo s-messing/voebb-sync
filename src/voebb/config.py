@@ -37,13 +37,17 @@ def account_slug(label: str) -> str:
     return re.sub(r"[^a-z0-9]", "", label.lower()) or "default"
 
 
-def derive_account(user: str) -> str:
+def derive_account(user: str, salt: str = "") -> str:
     """A stable namespace for an account, without exposing the card number.
 
     Calendar UIDs travel to every synced device, so the library card number
-    itself must not go in them.
+    itself must not go in them - and an 11-digit card number alone hashes
+    into a space small enough to brute-force, so the hash is salted with
+    something a stranger holding a UID does not also hold.
     """
-    return hashlib.sha1(user.encode()).hexdigest()[:8] if user else "default"
+    if not user:
+        return "default"
+    return hashlib.sha1(f"{salt}:{user}".encode()).hexdigest()[:8]
 
 
 DEFAULT_CALENDAR_NAME = "VÖBB Leihfristen"
@@ -91,7 +95,13 @@ def load_nextcloud_config() -> NextcloudConfig:
         raise SystemExit(f"VOEBB_ALARM_DAYS must not be negative, got {alarm_days}")
 
     label = os.getenv("VOEBB_ACCOUNT", "").strip()
-    account = account_slug(label) if label else derive_account(os.getenv("VOEBB_USER", "").strip())
+    account = (
+        account_slug(label)
+        if label
+        # Salted with the Nextcloud user: stable, always set, and not part
+        # of the UIDs that sync out.
+        else derive_account(os.getenv("VOEBB_USER", "").strip(), salt=user)
+    )
 
     return NextcloudConfig(
         url=url,
