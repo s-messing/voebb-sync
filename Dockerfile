@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 
-FROM python:3.13-slim-trixie
+FROM python:3.14-slim-trixie
 
 # tzdata because Loan.days_left is computed from the local date - without it a
 # container defaults to UTC and rolls over an hour early in Berlin summer time.
