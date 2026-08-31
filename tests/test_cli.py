@@ -59,3 +59,18 @@ def test_reason_never_reports_an_empty_cause():
     assert cli._reason(requests.ConnectionError()) == "ConnectionError"
     assert cli._reason(niquests.ConnectTimeout()) == "ConnectTimeout"
     assert cli._reason(AdisError("  spaced  ")) == "spaced"
+
+
+def test_json_before_sync_calendar_is_rejected(capsys):
+    """--json parses at the top level, but sync-calendar has no JSON output.
+    Refusing beats silently printing text."""
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--json", "sync-calendar"])
+    assert excinfo.value.code == 2
+    assert "--json" in capsys.readouterr().err
+
+
+def test_json_after_sync_calendar_is_rejected():
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["sync-calendar", "--json"])
+    assert excinfo.value.code == 2

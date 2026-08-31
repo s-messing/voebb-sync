@@ -156,6 +156,10 @@ def main(argv: list[str] | None = None) -> int:
     sync_cal.set_defaults(func=_cmd_sync_calendar)
 
     args = parser.parse_args(argv)
+    # --json before the subcommand parses fine even for subcommands that have
+    # no JSON output; refuse it rather than silently printing text.
+    if getattr(args, "json", False) and args.func is _cmd_sync_calendar:
+        parser.error("sync-calendar does not support --json")
     try:
         return args.func(args)
     except FAILURES as exc:
