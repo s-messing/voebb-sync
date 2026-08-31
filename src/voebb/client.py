@@ -90,12 +90,14 @@ class VoebbClient:
 
     def _reset_session(self) -> None:
         """Throw the session away so the next call logs in from scratch."""
+        stale = self.session
         self.session = AdisSession(
-            delay=self.session.delay,
-            timeout=self.session.timeout,
-            retries=self.session.retries,
+            delay=stale.delay,
+            timeout=stale.timeout,
+            retries=stale.retries,
         )
         self._logged_in = False
+        stale.http.close()
 
     def loans(self) -> list[Loan]:
         """Currently borrowed items with their due dates.

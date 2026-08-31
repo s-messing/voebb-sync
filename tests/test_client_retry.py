@@ -109,3 +109,21 @@ def test_happy_path_does_not_retry(client, monkeypatch):
     monkeypatch.setattr(client, "_loans", lambda: calls.append(1) or [])
     client.loans()
     assert len(calls) == 1
+
+
+def test_retry_closes_the_stale_sessions_connections(client, monkeypatch):
+    """The discarded session must not leak its connection pool."""
+    closed = []
+    monkeypatch.setattr(client.session.http, "close", lambda: closed.append(True))
+
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise SessionExpired("expired")
+        return []
+
+    monkeypatch.setattr(client, "_loans", flaky)
+    client.loans()
+    assert closed == [True]
