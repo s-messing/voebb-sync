@@ -35,6 +35,8 @@ from .session import build_retry
 _TRANSIENT_NOTE = re.compile(r"heute\s+verlängert", re.IGNORECASE)
 _REDUNDANT_NOTE = re.compile(r"\d+\s+Verlängerung(?:en)?", re.IGNORECASE)
 
+DAV_TIMEOUT = 30.0
+
 UID_PREFIX = "voebb-"
 UID_DOMAIN = "@voebb.local"
 PRODID = "-//voebb//loan reminders//DE"
@@ -223,7 +225,13 @@ def open_calendar(config: NextcloudConfig, *, create: bool = True) -> Any | None
     # caldav ships no py.typed, so its classes resolve to `object` and every
     # call through them looks non-callable to the type checker.
     client = caldav.DAVClient(  # ty: ignore[call-non-callable]
-        url=dav_root(config.url), username=config.user, password=config.app_password
+        url=dav_root(config.url),
+        username=config.user,
+        password=config.app_password,
+        # caldav defaults to no timeout at all, so a stalled server would hang
+        # the run until systemd's TimeoutStartSec kills it. Same budget as the
+        # aDIS side.
+        timeout=DAV_TIMEOUT,
     )
     # caldav rides on niquests, not requests, so it needs its own adapter -
     # but the same urllib3 retry policy drives both.

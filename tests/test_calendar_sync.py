@@ -312,3 +312,35 @@ class TestLegacyUidMigration:
         plan = plan_sync([loan], existing, alarm_days=3, account=ACCOUNT)
         assert self.LEGACY in plan.delete
         assert loan_uid(loan, ACCOUNT) in plan.create
+
+
+def test_dav_client_gets_a_timeout(monkeypatch):
+    """caldav defaults to timeout=None; a stalled server must error, not hang
+    until systemd's TimeoutStartSec kills the whole run."""
+    import caldav
+
+    from voebb.calendar_sync import open_calendar
+    from voebb.config import NextcloudConfig
+
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    class FakeSession:
+        def mount(self, *args):
+            pass
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.session = FakeSession()
+
+        def get_principal(self):
+            raise Stop
+
+    monkeypatch.setattr(caldav, "DAVClient", FakeClient)
+    config = NextcloudConfig(url="https://cloud.example.de", user="u", app_password="p")
+    with pytest.raises(Stop):
+        open_calendar(config)
+    assert seen.get("timeout"), "DAVClient must be given a finite timeout"
