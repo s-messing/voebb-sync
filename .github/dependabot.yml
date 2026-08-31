@@ -1,0 +1,17 @@
+# Weekly bumps for everything pinned: uv.lock, the workflow's action tags, and
+# the Dockerfile base images. The pre-commit revs are not covered here - bump
+# those by hand when the matching PR lands (ty especially; see README).
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
