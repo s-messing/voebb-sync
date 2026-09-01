@@ -159,11 +159,16 @@ class AdisSession:
         """Open a fresh session on the start page."""
         return self._absorb(self.http.get(START_URL, timeout=self.timeout))
 
-    def submit(self, controls: dict[str, str] | None = None) -> BeautifulSoup:
-        """POST the current form plus the clicked control; follow the 303."""
+    def submit(self, controls: dict[str, str | list[str]] | None = None) -> BeautifulSoup:
+        """POST the current form plus the clicked control; follow the 303.
+
+        A list value is sent as a repeated field, the way the browser submits
+        several hidden inputs of the same name (e.g. the filter tree's
+        checked boxes).
+        """
         if self.form is None:
             raise AdisError("submit() before start()")
-        data = dict(self.form.fields)
+        data: dict[str, str | list[str]] = dict(self.form.fields)
         data.update(controls or {})
         time.sleep(self.delay)  # a public library service; one request at a time
         response = self.http.post(
