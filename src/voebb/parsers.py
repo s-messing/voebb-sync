@@ -7,11 +7,12 @@ survives aDIS reordering or inserting columns.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import date, datetime
 
 from bs4 import BeautifulSoup, Tag
 
-from .models import Loan, SearchResult
+from .models import Format, Loan, SearchResult
 from .session import _attr
 
 _RENEWALS = re.compile(r"(\d+)\s+Verlängerung")
@@ -171,3 +172,44 @@ def parse_search_results(soup: BeautifulSoup) -> list[SearchResult]:
             )
         )
     return results
+
+
+# Trailing hit count on a facet label, e.g. "Blu-ray Disc (67)".
+_FACET_COUNT = re.compile(r"\s*\(\d+\)$")
+
+# Facet labels in the result list's "Medienart" filter branch mostly equal the
+# Format values (the advanced-search dropdown vocabulary), except for:
+_FORMAT_FACET_LABELS = {
+    Format.BOOK: "Buch (Print)",
+    Format.DEVICE: "Gerät (Laptop u.a.)",
+}
+
+
+def format_checkbox_ids(soup: BeautifulSoup, formats: Iterable[Format]) -> list[str]:
+    """Checkbox ids for the given formats in the result list's filter tree.
+
+    Only the "Medienart" branch of the tree is consulted: other branches
+    (Schlagwort, ...) reuse some of the same labels, but the server ANDs
+    across branches while it ORs within one, so a match outside Medienart
+    would narrow instead of widen.
+
+    Formats without a facet on the page are dropped - the tree only lists
+    formats that occur in the current result set.
+    """
+    branch = next(
+        (
+            b
+            for b in soup.select("div.cbtree_div li.cbtree_branch_li")
+            if _text(b.find("button")) == "Medienart"
+        ),
+        None,
+    )
+    if branch is None:
+        return []
+    by_label: dict[str, str] = {}
+    for link in branch.select("a.cbtree_leaf_a"):
+        label = _FACET_COUNT.sub("", _text(link)).casefold()
+        # The leaf link lnk-<node> pairs with the checkbox sub-<node>.
+        by_label.setdefault(label, _attr(link, "id").replace("lnk-", "sub-", 1))
+    wanted = [_FORMAT_FACET_LABELS.get(f, f.value).casefold() for f in formats]
+    return [by_label[label] for label in wanted if label in by_label]

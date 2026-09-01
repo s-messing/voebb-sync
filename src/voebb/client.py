@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Iterable
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from .config import Credentials, load_credentials
-from .models import Loan, SearchResult
-from .parsers import parse_loans, parse_search_results
-from .session import AdisError, AdisSession, SessionExpired
+from .models import Format, Loan, SearchResult
+from .parsers import format_checkbox_ids, parse_loans, parse_search_results
+from .session import AdisError, AdisSession, SessionExpired, _attr
 
 # Screen codes, as passed to htmlOnLink() by the site's own JS.
 KONTO = "*SBK"
@@ -128,15 +129,40 @@ class VoebbClient:
 
     # -- catalogue --------------------------------------------------------
 
-    def search(self, query: str) -> list[SearchResult]:
+    def search(self, query: str, formats: Iterable[Format] | None = None) -> list[SearchResult]:
         """Search the catalogue. Does not require an account.
 
         Returns the first page of hits; the server-rendered result list carries
         no total count and no pagination controls, so this is all the site gives
         us without JavaScript.
+
+        ``formats`` narrows the hits to items in any of the given formats, the
+        way the browser UI does it: tick the formats' boxes in the result
+        list's "Medienart" filter tree, then press "Filtern". The tree only
+        lists formats that occur in the current result set, so a format
+        without hits is simply dropped - and if none of the requested formats
+        has hits, the empty list is returned without a second request.
         """
         self._ensure_search_box()
         page: BeautifulSoup = self.session.submit({"$Autosuggest": query, "$Button": "Suchen"})
+        wanted = list(formats or [])
+        if not wanted:
+            return parse_search_results(page)
+
+        boxes = format_checkbox_ids(page, wanted)
+        if not boxes:
+            return []
+        # Checked facet boxes travel as one repeated field: $CbTree_text, one
+        # value per checkbox id (requests encodes a list as repeated fields),
+        # mirroring the hidden inputs mjsInitCbTree() appends in the site's
+        # own JS. The Filtern button's positional $Button$n name shifts
+        # between pages, so read it off the page instead of hardcoding it.
+        filter_button = page.find("input", attrs={"value": "Filtern"})
+        if not isinstance(filter_button, Tag):
+            raise AdisError(
+                f"result list has a filter tree but no Filtern button ({self.session.url})"
+            )
+        page = self.session.submit({"$CbTree_text": boxes, _attr(filter_button, "name"): "Filtern"})
         return parse_search_results(page)
 
     def _ensure_search_box(self) -> None:
