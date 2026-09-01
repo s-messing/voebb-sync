@@ -26,6 +26,7 @@ uv run voebb-cli loans                        # borrowed items, soonest due firs
 uv run voebb-cli --json loans                 # same, as JSON
 uv run voebb-cli search "Kafka Verwandlung"   # catalogue search, no login needed
 uv run voebb-cli search "Kafka" -n 20
+uv run voebb-cli search "Harry Potter" --format dvd,blu_ray   # only these media formats
 
 uv run voebb-cli sync-calendar --dry-run      # show what would change
 uv run voebb-cli sync-calendar                # write reminders to Nextcloud

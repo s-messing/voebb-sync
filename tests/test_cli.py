@@ -12,6 +12,7 @@ import requests
 from caldav.lib.error import AuthorizationError, DAVError
 
 from voebb import cli
+from voebb.models import Format
 from voebb.session import AdisError, SessionExpired
 
 
@@ -74,3 +75,45 @@ def test_json_after_sync_calendar_is_rejected():
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["sync-calendar", "--json"])
     assert excinfo.value.code == 2
+
+
+class FakeClient:
+    """Stands in for VoebbClient; records what search() was asked for."""
+
+    calls: list = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        pass
+
+    def search(self, query, formats=None):
+        FakeClient.calls.append((query, formats))
+        return []
+
+
+@pytest.fixture
+def fake_client(monkeypatch):
+    FakeClient.calls = []
+    monkeypatch.setattr(cli, "VoebbClient", FakeClient)
+    return FakeClient
+
+
+def test_format_flag_repeats_and_splits_commas(fake_client, capsys):
+    assert cli.main(["search", "kafka", "--format", "dvd", "--format", "blu-ray,book"]) == 0
+    assert fake_client.calls == [("kafka", [Format.DVD, Format.BLU_RAY, Format.BOOK])]
+
+
+def test_no_format_flag_passes_none(fake_client, capsys):
+    assert cli.main(["search", "kafka"]) == 0
+    assert fake_client.calls == [("kafka", None)]
+
+
+def test_unknown_format_lists_the_valid_names(fake_client, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["search", "kafka", "--format", "vhs"])
+    assert excinfo.value.code == 2
+    err = capsys.readouterr().err
+    assert "unknown format 'vhs'" in err
+    assert "BLU_RAY" in err and "MICROFILM" in err
