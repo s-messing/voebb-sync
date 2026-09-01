@@ -14,6 +14,7 @@ from caldav.lib.error import DAVError
 from .calendar_sync import loan_uid, sync
 from .client import VoebbClient
 from .config import load_caldav_config
+from .models import Format
 from .session import AdisError
 
 # Everything a run can fail on that is not a bug: voebb.de (AdisError), the
@@ -51,9 +52,29 @@ def _cmd_loans(args: argparse.Namespace) -> int:
     return 0
 
 
+def _format_arg(value: str) -> list[Format]:
+    """One --format occurrence: a member name, or a comma list of them.
+
+    Names are matched case-insensitively and '-' counts as '_', so the
+    natural spellings ``--format dvd,blu-ray`` work. Returning a list per
+    occurrence lets argparse's ``extend`` action flatten repeated flags and
+    comma lists into one list[Format].
+    """
+    formats = []
+    for token in value.split(","):
+        if not (token := token.strip()):
+            continue
+        try:
+            formats.append(Format[token.upper().replace("-", "_")])
+        except KeyError:
+            names = ", ".join(f.name for f in Format)
+            raise argparse.ArgumentTypeError(f"unknown format {token!r}; one of: {names}") from None
+    return formats
+
+
 def _cmd_search(args: argparse.Namespace) -> int:
     with VoebbClient() as client:
-        results = client.search(args.query)
+        results = client.search(args.query, formats=args.format)
     if getattr(args, "json", False):
         _emit_json(results)
         return 0
@@ -140,6 +161,16 @@ def main(argv: list[str] | None = None) -> int:
     search = sub.add_parser("search", help="search the catalogue", parents=[common])
     search.add_argument("query")
     search.add_argument("-n", "--limit", type=int, default=10, help="results to show (default 10)")
+    search.add_argument(
+        "-f",
+        "--format",
+        action="extend",
+        type=_format_arg,
+        default=None,
+        metavar="FORMAT[,FORMAT]",
+        help="only these media formats, e.g. --format dvd --format blu_ray "
+        "or --format dvd,blu_ray (case-insensitive; a wrong name lists all)",
+    )
     search.set_defaults(func=_cmd_search)
 
     sync_cal = sub.add_parser(
