@@ -228,6 +228,16 @@ class TestPlanSync:
         assert list(plan.update) == [loan_uid(moved, ACCOUNT)]
         assert plan.delete == [loan_uid(going, ACCOUNT)]
 
+    def test_deleted_events_keep_their_title_for_the_report(self):
+        """The loan is gone from the account, so the title must come from
+        the event itself - otherwise the report can only show the UID."""
+        gone = make_loan(title="Das Schloss", item_number="99999999999")
+        uid = loan_uid(gone, ACCOUNT)
+        existing = {uid: build_event(gone, alarm_days=3, account=ACCOUNT)}
+        plan = plan_sync([], existing, alarm_days=3, account=ACCOUNT)
+        assert plan.delete == [uid]
+        assert plan.titles[uid] == "Das Schloss"
+
     def test_summary_reads_naturally(self):
         assert "1 angelegt" in plan_sync([make_loan()], {}, alarm_days=3, account=ACCOUNT).summary()
 

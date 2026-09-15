@@ -40,6 +40,7 @@ DAV_TIMEOUT = 30.0
 UID_PREFIX = "voebb-"
 UID_DOMAIN = "@voebb.local"
 PRODID = "-//voebb//loan reminders//DE"
+SUMMARY_PREFIX = "Rückgabe: "
 
 
 def namespace(account: str) -> str:
@@ -87,7 +88,7 @@ def build_event(
 
     event = Event()
     event.add("uid", loan_uid(loan, account))
-    event.add("summary", f"Rückgabe: {loan.title}")
+    event.add("summary", f"{SUMMARY_PREFIX}{loan.title}")
     event.add("location", loan.library)
     event.add("description", _describe(loan))
     # date (not datetime) makes icalendar emit DTSTART;VALUE=DATE, i.e. all-day.
@@ -130,6 +131,18 @@ def _describe(loan: Loan) -> str:
     return "\n".join(lines)
 
 
+def event_title(ical: bytes) -> str:
+    """The loan's title as stored in the event, for reporting.
+
+    The only source of a title for an event that is about to be deleted:
+    the item is no longer in the loan list, so nothing else knows it.
+    """
+    for component in Calendar.from_ical(ical).walk("VEVENT"):
+        summary = str(component.get("summary", ""))
+        return summary.removeprefix(SUMMARY_PREFIX) or "(ohne Titel)"
+    return "(ohne Titel)"
+
+
 def event_signature(ical: bytes) -> tuple:
     """The parts of an event we actually care about keeping in sync.
 
@@ -164,6 +177,9 @@ class SyncPlan:
     unchanged: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     calendar_missing: bool = False
+    # UID -> loan title for every event the plan touches, so a report can
+    # name deleted events too - their loans are gone from the account.
+    titles: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_empty(self) -> bool:
@@ -213,6 +229,9 @@ def plan_sync(
             plan.unchanged.append(uid)
 
     plan.delete = [uid for uid in existing if uid not in desired]
+
+    plan.titles = {uid: event_title(ical) for uid, ical in existing.items()}
+    plan.titles.update({uid: event_title(ical) for uid, ical in desired.items()})
     return plan
 
 

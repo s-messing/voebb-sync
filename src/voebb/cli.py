@@ -11,7 +11,7 @@ import niquests
 import requests
 from caldav.lib.error import DAVError
 
-from .calendar_sync import loan_uid, sync
+from .calendar_sync import sync
 from .client import VoebbClient
 from .config import load_caldav_config
 from .models import Format
@@ -102,8 +102,8 @@ def _cmd_sync_calendar(args: argparse.Namespace) -> int:
     with VoebbClient() as client:
         loans = client.loans()
 
-    titles = {loan_uid(loan, config.account): loan.title for loan in loans}
     plan = sync(loans, config, dry_run=args.dry_run)
+    titles = plan.titles
 
     for uid, label in (("+", "create"), ("~", "update")):
         for event_uid in getattr(plan, label):
