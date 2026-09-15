@@ -83,6 +83,12 @@ def test_empty_account_is_not_an_error():
     assert parse_loans(soup("loans_empty.html")) == []
 
 
+def test_empty_account_with_placeholder_row_is_empty():
+    """Since September 2026 an empty account renders the table with one
+    all-blank row. That is not a nameless loan with no due date."""
+    assert parse_loans(soup("loans_blank_row.html")) == []
+
+
 def test_unrecognisable_page_raises():
     with pytest.raises(ParseError):
         parse_loans(BeautifulSoup("<html><body><p>Hoppla</p></body></html>", "lxml"))

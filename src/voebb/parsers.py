@@ -131,6 +131,11 @@ def parse_loans(soup: BeautifulSoup) -> list[Loan]:
             continue
 
         media_type, title, shelf_mark, item_number = _split_title_cell(cells[i_title])
+        if not title:
+            # An empty account renders the table with one all-blank row
+            # (since September 2026; before that it was prose, handled
+            # above). Not a loan - and it must not become a nameless one.
+            continue
 
         note = cell(cells, i_note)
         renewals = int(m.group(1)) if (m := _RENEWALS.search(note)) else None

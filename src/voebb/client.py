@@ -21,6 +21,23 @@ class VoebbAuthError(AdisError):
     """The card number / password was rejected."""
 
 
+def screen_name(page: BeautifulSoup) -> str:
+    """Which screen the server rendered, as its own breadcrumb names it.
+
+    Every page carries ``<h1>Aktuelle Seite: Mein Konto - Ausleihen</h1>``.
+    That is the reliable marker: the ``<title>`` used to repeat the screen
+    name, but since September 2026 the loans page carries only the bare site
+    name there, so anything keyed on the title mistook it for a wrong page.
+    """
+    heading = page.find("h1")
+    text = heading.get_text(" ", strip=True) if heading else ""
+    return text.removeprefix("Aktuelle Seite:").strip()
+
+
+def _page_title(page: BeautifulSoup) -> str:
+    return page.title.get_text(strip=True) if page.title else ""
+
+
 class VoebbClient:
     """Log in once, then read the account.
 
@@ -85,7 +102,7 @@ class VoebbClient:
             raise VoebbAuthError(
                 "login rejected - check VOEBB_USER (library card number) and VOEBB_PASSWORD"
             )
-        if "Mein Konto" not in (page.title.get_text(strip=True) if page.title else ""):
+        if "Mein Konto" not in screen_name(page) and "Mein Konto" not in _page_title(page):
             raise AdisError(f"unexpected page after login: {self.session.url}")
         self._logged_in = True
 
@@ -122,9 +139,10 @@ class VoebbClient:
         page = self.session.navigate(AUSLEIHEN)
         if self.session.at_start_page():
             raise SessionExpired("session expired while opening loans")
-        title = page.title.get_text(strip=True) if page.title else ""
-        if not title.startswith("Meine Ausleihen"):
-            raise AdisError(f"expected the loans page, got {title!r} at {self.session.url}")
+        screen = screen_name(page)
+        if not (screen.endswith("Ausleihen") or _page_title(page).startswith("Meine Ausleihen")):
+            where = screen or _page_title(page)
+            raise AdisError(f"expected the loans page, got {where!r} at {self.session.url}")
         return parse_loans(page)
 
     # -- catalogue --------------------------------------------------------
